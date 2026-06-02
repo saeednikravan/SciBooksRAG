@@ -1,4 +1,4 @@
-import { KnowledgeGraph } from './graph.model';
+export type QueryMode = 'naive' | 'local' | 'global' | 'hybrid' | 'mix' | 'bypass';
 
 export interface ChatMessage {
   id: string;
@@ -6,7 +6,6 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   references?: ReferenceItem[];
-  graph?: KnowledgeGraph;
 }
 
 export interface ReferenceItem {

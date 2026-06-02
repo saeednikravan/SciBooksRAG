@@ -1,59 +1,75 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
+import { ChatMessage, QueryRequest, QueryResponse } from '../models/chat.model';
 import { environment } from '../../../environments/environment';
-import { QueryRequest, QueryResponse, ChatMessage } from '../models/chat.model';
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
-  private http = inject(HttpClient);
   private api = inject(ApiService);
 
   query(request: QueryRequest): Observable<QueryResponse> {
     return this.api.post<QueryResponse>('/query', request);
   }
 
-  async queryStream(
-    request: QueryRequest
-  ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
-    const url = `${environment.apiBaseUrl}/query`;
-    const token = localStorage.getItem('lightrag_token') || '';
-    const authHeader = `Bearer ${token}`;
+  queryStream(request: QueryRequest): Observable<string> {
+    return new Observable(observer => {
+      const token = localStorage.getItem('lightrag_token');
+      const url = `${environment.apiBaseUrl}/query/stream`;
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/x-ndjson'
+        },
+        body: JSON.stringify({ ...request, stream: true })
+      }).then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let accumulated = '';
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-        Accept: 'application/x-ndjson'
-      },
-      body: JSON.stringify({ ...request, stream: true })
+        const read = () => {
+          reader.read().then(({ done, value }) => {
+            if (done) { observer.complete(); return; }
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const data = JSON.parse(line);
+                if (data.response) {
+                  accumulated += data.response;
+                  observer.next(data.response);
+                }
+                if (data.error) {
+                  observer.error(new Error(data.error));
+                }
+              } catch { observer.next(line); }
+            }
+            read();
+          }).catch(err => observer.error(err));
+        };
+        read();
+      }).catch(err => observer.error(err));
     });
-
-    if (!response.ok || !response.body) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.body.getReader();
   }
 
   getConversationHistory(): Array<{ role: string; content: string }> {
     try {
       const history = localStorage.getItem('lightrag_chat_history');
       return history ? JSON.parse(history) : [];
-    } catch {
-      return [];
-    }
+    } catch { return []; }
   }
 
   saveToHistory(messages: ChatMessage[]): void {
     const history = messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-20)
-      .map((m) => ({ role: m.role, content: m.content }));
+      .map(m => ({ role: m.role, content: m.content }));
     localStorage.setItem('lightrag_chat_history', JSON.stringify(history));
-  }
-
-  clearHistory(): void {
-    localStorage.removeItem('lightrag_chat_history');
   }
 }

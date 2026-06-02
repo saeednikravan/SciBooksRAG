@@ -1,60 +1,47 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
-const TOKEN_KEY = 'lightrag_token';
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
+  private apiUrl = environment.apiBaseUrl;
   private isLoggedInSubject = new BehaviorSubject<boolean>(this.hasToken());
-  isLoggedIn$: Observable<boolean> = this.isLoggedInSubject.asObservable();
+  isLoggedIn$ = this.isLoggedInSubject.asObservable();
 
-  async login(username: string, password: string): Promise<boolean> {
-    try {
-      const body = new URLSearchParams();
-      body.set('username', username);
-      body.set('password', password);
-
-      const result = await firstValueFrom(
-        this.http.post<{ access_token: string; token_type: string }>(
-          `${environment.apiBaseUrl}/login`,
-          body.toString(),
-          {
-            headers: new HttpHeaders({
-              'Content-Type': 'application/x-www-form-urlencoded'
-            })
-          }
-        )
-      );
-
-      if (result.access_token) {
-        localStorage.setItem(TOKEN_KEY, result.access_token);
+  login(username: string, password: string): Observable<LoginResponse> {
+    const body = new URLSearchParams();
+    body.set('username', username);
+    body.set('password', password);
+    const headers = new HttpHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' });
+    return this.http.post<LoginResponse>(`${this.apiUrl}/login`, body.toString(), { headers }).pipe(
+      tap(res => {
+        localStorage.setItem('lightrag_token', res.access_token);
         this.isLoggedInSubject.next(true);
-        return true;
-      }
-      return false;
-    } catch (err: any) {
-      const detail = err?.error?.detail || 'خطا در ارتباط با سرور';
-      throw new Error(detail);
-    }
+      })
+    );
   }
 
   logout(): void {
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem('lightrag_token');
     this.isLoggedInSubject.next(false);
+  }
+
+  getToken(): string | null {
+    return localStorage.getItem('lightrag_token');
   }
 
   isAuthenticated(): boolean {
     return this.hasToken();
   }
 
-  getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
-  }
-
   private hasToken(): boolean {
-    return !!localStorage.getItem(TOKEN_KEY);
+    return !!localStorage.getItem('lightrag_token');
   }
 }

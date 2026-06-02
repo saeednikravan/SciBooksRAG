@@ -1,0 +1,241 @@
+<div class="graph-page">
+  <app-header title="Knowledge Graph" />
+
+  <div class="graph-content">
+    @if (graphLoading()) {
+      <div class="loading-overlay" role="status" aria-live="polite">
+        <div class="spinner-container">
+          <div class="loading-spinner" aria-hidden="true"></div>
+          <p>Loading graph data...</p>
+        </div>
+      </div>
+    }
+
+    @if (!graphLoading() && graphError()) {
+      <div class="error-banner" role="alert">
+        <h4>Failed to load graph</h4>
+        <p>{{ graphError() }}</p>
+        <button class="btn btn-primary" (click)="loadGraph()">Retry</button>
+      </div>
+    }
+
+    @if (showEmpty()) {
+      <div class="empty-graph-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <circle cx="19" cy="5" r="2"></circle>
+            <circle cx="5" cy="5" r="2"></circle>
+            <circle cx="19" cy="19" r="2"></circle>
+            <circle cx="5" cy="19" r="2"></circle>
+            <line x1="12" y1="9" x2="12" y2="5"></line>
+            <line x1="14.5" y1="13.5" x2="17" y2="17"></line>
+            <line x1="9.5" y1="13.5" x2="7" y2="17"></line>
+            <line x1="5.5" y1="7" x2="5" y2="5"></line>
+            <line x1="18.5" y1="7" x2="19" y2="5"></line>
+          </svg>
+        </div>
+        <h3>No graph data</h3>
+        <p>The knowledge graph is empty. Select a label or add entities.</p>
+      </div>
+    }
+
+    <div class="controls-top-left">
+      <div class="label-picker panel">
+        <label class="label-label" for="label-input">Label filter</label>
+        <div class="label-input-row">
+          <input
+            id="label-input"
+            class="input label-input"
+            [(ngModel)]="labelQuery"
+            (input)="searchLabels()"
+            placeholder="Search labels..."
+          />
+          @if (labelSuggestions().length) {
+            <div class="suggestions" role="listbox">
+              @for (s of labelSuggestions(); track s) {
+                <div class="suggestion-item" role="option" (click)="selectLabel(s)">{{ s }}</div>
+              }
+            </div>
+          }
+        </div>
+        <select
+          class="input label-select"
+          [ngModel]="selectedLabel()"
+          (ngModelChange)="selectedLabel.set($event); loadGraph()"
+        >
+          <option value="">All entities</option>
+          @for (l of popularLabels(); track l) {
+            <option [value]="l">{{ l }}</option>
+          }
+        </select>
+      </div>
+    </div>
+
+    <div class="legend panel scroll-area">
+      <div class="legend-title">Entity Types</div>
+      @for (t of entityTypes; track t) {
+        <div class="legend-item" [title]="t">
+          <span class="legend-dot" [style.background]="colorFor(t)"></span>
+          <span class="legend-text">{{ t }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="graph-container" #graphContainer></div>
+
+    <!-- Debug info -->
+    @if (debug()) {
+      <div class="legend panel" style="left:280px;right:auto;bottom:80px;top:auto;min-width:200px;z-index:20;">
+        <div class="legend-title">Debug</div>
+        <div style="font-size:11px;display:flex;flex-direction:column;gap:2px;">
+          <span>Nodes: {{ graphData().nodes.length }}</span>
+          <span>Edges: {{ graphData().edges.length }}</span>
+          <span>Loading: {{ graphLoading() }}</span>
+          <span>Error: {{ graphError() || 'none' }}</span>
+          <span>ShowEmpty: {{ showEmpty() }}</span>
+          <span>Container: {{ debugSize() }}</span>
+        </div>
+      </div>
+    }
+
+    <div class="fab-panel panel">
+      <span class="fab-title">Manage</span>
+      <button class="btn fab-btn" (click)="loadSampleData()" title="Load sample data for testing">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+        Sample
+      </button>
+      <button class="btn fab-btn" (click)="openModal('createEntity')">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Add Entity
+      </button>
+      <button class="btn fab-btn" (click)="openModal('editEntity')">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        Edit Entity
+      </button>
+      <button class="btn fab-btn" (click)="openModal('deleteEntity')">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        Delete Entity
+      </button>
+      <button class="btn fab-btn" (click)="openModal('createRelation')">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+        Add Relation
+      </button>
+      <button class="btn fab-btn" (click)="openModal('deleteRelation')">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        Delete Relation
+      </button>
+      <button class="btn fab-btn" (click)="openModal('mergeEntities')">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+        Merge
+      </button>
+    </div>
+
+    @if (modal().visible) {
+      <div class="modal-overlay" (click)="closeModal()" role="dialog" aria-modal="true">
+        <div class="modal card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>{{ modalTitle() }}</h3>
+            <button class="btn btn-icon btn-ghost" (click)="closeModal()" aria-label="Close modal">
+              <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div class="modal-body">
+            @if (modal().type === 'createEntity' || modal().type === 'editEntity') {
+              <div class="form-group">
+                <label for="entity-name">Entity Name</label>
+                <input id="entity-name" class="input" [(ngModel)]="formEntityName" placeholder="e.g. entity_001" />
+              </div>
+              <div class="form-group">
+                <label for="entity-type">Type</label>
+                <select id="entity-type" class="input" [(ngModel)]="formEntityType">
+                  @for (t of entityTypes; track t) { <option [value]="t">{{ t }}</option> }
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="entity-desc">Description (optional)</label>
+                <textarea id="entity-desc" class="input form-textarea" [(ngModel)]="formEntityDesc" placeholder="Description"></textarea>
+              </div>
+            }
+
+            @if (modal().type === 'deleteEntity') {
+              <div class="form-group">
+                <label for="delete-id">Entity Name to delete</label>
+                <input id="delete-id" class="input" [(ngModel)]="formDeleteEntity" placeholder="entity_001" />
+              </div>
+            }
+
+            @if (modal().type === 'createRelation') {
+              <div class="form-group">
+                <label for="rel-source">Source entity</label>
+                <input id="rel-source" class="input" [(ngModel)]="formRelSource" placeholder="entity_001" />
+              </div>
+              <div class="form-group">
+                <label for="rel-target">Target entity</label>
+                <input id="rel-target" class="input" [(ngModel)]="formRelTarget" placeholder="entity_002" />
+              </div>
+              <div class="form-group">
+                <label for="rel-label">Relation label</label>
+                <input id="rel-label" class="input" [(ngModel)]="formRelLabel" placeholder="e.g. wrote" />
+              </div>
+              <div class="form-group">
+                <label for="rel-desc">Description (optional)</label>
+                <input id="rel-desc" class="input" [(ngModel)]="formRelDesc" placeholder="Description" />
+              </div>
+            }
+
+            @if (modal().type === 'deleteRelation') {
+              <div class="form-group">
+                <label for="del-rel-source">Source entity</label>
+                <input id="del-rel-source" class="input" [(ngModel)]="formDelRelSource" placeholder="entity_001" />
+              </div>
+              <div class="form-group">
+                <label for="del-rel-target">Target entity</label>
+                <input id="del-rel-target" class="input" [(ngModel)]="formDelRelTarget" placeholder="entity_002" />
+              </div>
+            }
+
+            @if (modal().type === 'mergeEntities') {
+              <div class="form-group">
+                <label for="merge-sources">Source entities (comma-separated)</label>
+                <input id="merge-sources" class="input" [(ngModel)]="formMergeSources" placeholder="entity_001, entity_002" />
+              </div>
+              <div class="form-group">
+                <label for="merge-target">Target entity (will survive)</label>
+                <input id="merge-target" class="input" [(ngModel)]="formMergeTarget" placeholder="entity_003" />
+              </div>
+            }
+
+            @if (modal().error) {
+              <div class="result-box error-box" role="alert">
+                <pre>{{ modal().error }}</pre>
+              </div>
+            }
+
+            @if (modal().result) {
+              <div class="result-box success-box">
+                <pre>{{ modal().result | json }}</pre>
+              </div>
+            }
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn" (click)="closeModal()">Cancel</button>
+            <button class="btn btn-primary" (click)="executeModal()" [disabled]="modalLoading()">
+              @if (modalLoading()) {
+                <span class="loading-spinner-small" aria-hidden="true"></span>
+                Processing...
+              } @else {
+                Execute
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</div>

@@ -4,6 +4,10 @@ export interface GraphNode {
   entity_type?: string;
   description?: string;
   degree?: number;
+  x?: number;
+  y?: number;
+  fx?: number | null;
+  fy?: number | null;
 }
 
 export interface GraphEdge {

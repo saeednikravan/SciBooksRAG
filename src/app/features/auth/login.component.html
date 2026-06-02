@@ -1,0 +1,63 @@
+<div class="login-container">
+  <div class="login-card card">
+    <div class="login-logo" aria-hidden="true">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <circle cx="19" cy="5" r="2"></circle>
+        <circle cx="5" cy="5" r="2"></circle>
+        <circle cx="19" cy="19" r="2"></circle>
+        <circle cx="5" cy="19" r="2"></circle>
+        <line x1="12" y1="9" x2="12" y2="5"></line>
+        <line x1="14.5" y1="13.5" x2="17" y2="17"></line>
+        <line x1="9.5" y1="13.5" x2="7" y2="17"></line>
+        <line x1="5.5" y1="7" x2="5" y2="5"></line>
+        <line x1="18.5" y1="7" x2="19" y2="5"></line>
+      </svg>
+    </div>
+    <h1>SciBooksRAG</h1>
+    <p class="subtitle">Scientific Books RAG Interface</p>
+
+    @if (error()) {
+      <div class="error-message" role="alert">{{ error() }}</div>
+    }
+
+    <form (ngSubmit)="onSubmit()" class="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input
+          id="username"
+          class="input"
+          type="text"
+          [(ngModel)]="username"
+          name="username"
+          required
+          autocomplete="username"
+          [disabled]="loading()"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          class="input"
+          type="password"
+          [(ngModel)]="password"
+          name="password"
+          required
+          autocomplete="current-password"
+          [disabled]="loading()"
+        />
+      </div>
+
+      <button class="btn btn-primary login-btn" type="submit" [disabled]="loading()">
+        @if (loading()) {
+          <span class="loading-spinner-small" aria-hidden="true"></span>
+          Signing in...
+        } @else {
+          Sign In
+        }
+      </button>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,39 @@
+<div class="message" [class.user-message]="message().role === 'user'" [class.assistant-message]="message().role === 'assistant'">
+  <div class="avatar" aria-hidden="true">
+    @if (message().role === 'user') {
+      <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    } @else {
+      <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="14" rx="2"></rect>
+        <path d="M12 8v4"></path>
+        <path d="M12 16h.01"></path>
+      </svg>
+    }
+  </div>
+  <div class="bubble">
+    <div class="content">{{ message().content }}</div>
+
+    @if (message().references?.length) {
+      <details class="references">
+        <summary>References ({{ message().references!.length }})</summary>
+        <ol>
+          @for (ref of message().references; track ref.reference_id) {
+            <li>
+              <span class="ref-file">{{ ref.file_path }}</span>
+              @if (ref.content?.length) {
+                <ul class="ref-content">
+                  @for (c of ref.content; track c) {
+                    <li>{{ c }}</li>
+                  }
+                </ul>
+              }
+            </li>
+          }
+        </ol>
+      </details>
+    }
+  </div>
+</div>

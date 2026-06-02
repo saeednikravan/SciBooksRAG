@@ -1,205 +1,60 @@
-import {
-  Component,
-  OnInit,
-  signal,
-  inject,
-  ViewChild,
-  ElementRef,
-  AfterViewChecked
-} from '@angular/core';
+import { Component, inject, signal, ViewChild, ElementRef, AfterViewInit, OnInit, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
-import { ChatMessage, QueryRequest } from '../../core/models/chat.model';
-import { ChatService } from '../../core/services/chat.service';
-import { GraphService } from '../../core/services/graph.service';
-import { AuthService } from '../../core/services/auth.service';
-import { ChatMessageComponent } from './chat-message/chat-message.component';
 import { HeaderComponent } from '../../layout/header/header.component';
+import { ChatMessageComponent } from './chat-message/chat-message.component';
+import { ChatService } from '../../core/services/chat.service';
+import { ChatMessage, QueryMode } from '../../core/models/chat.model';
+
+const HISTORY_KEY = 'lightrag_chat_history';
 
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, ChatMessageComponent, HeaderComponent],
-  template: `
-    <div class="chat-page">
-      <app-header title="Chat" />
-
-      <div class="chat-messages" #messagesContainer>
-        @if (messages().length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            </div>
-            <h3>Welcome to SciBooksRAG</h3>
-            <p>Ask questions about your knowledge base using RAG-powered search</p>
-            <div class="suggestions">
-              @for (suggestion of suggestions; track suggestion) {
-                <button class="suggestion-chip" (click)="useSuggestion(suggestion)">
-                  {{ suggestion }}
-                </button>
-              }
-            </div>
-          </div>
-        }
-
-        @for (msg of messages(); track msg.id) {
-          <app-chat-message [message]="msg" />
-        }
-
-        @if (isLoading()) {
-          <div class="typing-indicator">
-            <span></span><span></span><span></span>
-          </div>
-        }
-      </div>
-
-      <div class="chat-input-bar">
-        <div class="mode-selector">
-          <select [(ngModel)]="selectedMode" name="mode" [disabled]="isLoading()">
-            @for (mode of availableModes; track mode.value) {
-              <option [value]="mode.value">{{ mode.label }}</option>
-            }
-          </select>
-          @if (messages().length > 0) {
-            <button class="clear-btn" (click)="clearChat()" title="Clear chat history">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
-              Clear
-            </button>
-          }
-        </div>
-        <div class="input-wrapper">
-          <textarea
-            [(ngModel)]="newMessage"
-            name="message"
-            placeholder="Type your message..."
-            (keydown.enter)="sendMessage(); $event.preventDefault()"
-            [disabled]="isLoading()"
-            rows="1"
-          ></textarea>
-          <button
-            class="send-btn"
-            (click)="sendMessage()"
-            [disabled]="!newMessage.trim() || isLoading()"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  `,
+  imports: [FormsModule, HeaderComponent, ChatMessageComponent],
+  templateUrl: './chat.component.html',
   styles: [`
-    .chat-page {
-      display: flex; flex-direction: column; height: 100vh;
-      background: #ffffff;
-    }
-    .chat-messages {
-      flex: 1; overflow-y: auto; padding: 24px;
-      scroll-behavior: smooth;
-    }
-    .empty-state {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      height: 100%; text-align: center; gap: 12px;
-    }
-    .empty-icon {
-      width: 80px; height: 80px; border-radius: 20px;
-      background: #f0fdf4; color: #22c55e;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .empty-state h3 { font-size: 18px; color: #0f172a; margin: 0; }
-    .empty-state p { font-size: 14px; color: #64748b; margin: 0; max-width: 360px; }
-    .suggestions {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      justify-content: center; margin-top: 8px;
-    }
-    .suggestion-chip {
-      padding: 8px 16px; border-radius: 20px;
-      border: 1.5px solid #e2e8f0; background: #f8fafc;
-      color: #334155; font-size: 13px; cursor: pointer;
-      transition: all 0.15s;
-    }
-    .suggestion-chip:hover { border-color: #22c55e; color: #22c55e; background: #f0fdf4; }
-    .typing-indicator {
-      display: flex; gap: 4px; padding: 16px 20px;
-      margin-right: auto; margin-bottom: 20px;
-    }
-    .typing-indicator span {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #94a3b8; animation: typing 1.4s infinite;
-    }
-    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing {
-      0%, 60%, 100% { opacity: 0.3; transform: scale(1); }
-      30% { opacity: 1; transform: scale(1.2); }
-    }
-    .chat-input-bar {
-      border-top: 1px solid #e2e8f0;
-      padding: 16px 24px;
-      background: #ffffff;
-    }
-    .mode-selector {
-      margin-bottom: 8px;
-    }
-    .mode-selector select {
-      padding: 6px 12px; border: 1.5px solid #e2e8f0;
-      border-radius: 8px; font-size: 13px; color: #334155;
-      background: #f8fafc; cursor: pointer; outline: none;
-    }
-    .mode-selector select:focus { border-color: #22c55e; }
-    .clear-btn {
-      padding: 5px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px;
-      background: #fff; color: #64748b; cursor: pointer; font-size: 12px;
-      display: inline-flex; align-items: center; gap: 4px;
-      transition: all .15s;
-    }
-    .clear-btn:hover { border-color: #ef4444; color: #ef4444; }
-    .input-wrapper {
-      display: flex; align-items: flex-end; gap: 8px;
-      background: #f8fafc; border: 1.5px solid #e2e8f0;
-      border-radius: 14px; padding: 8px 12px;
-      transition: border-color 0.2s;
-    }
-    .input-wrapper:focus-within { border-color: #22c55e; }
-    .input-wrapper textarea {
-      flex: 1; border: none; background: transparent;
-      outline: none; font-size: 14px; color: #0f172a;
-      resize: none; font-family: inherit; line-height: 1.5;
-      max-height: 120px;
-    }
-    .input-wrapper textarea::placeholder { color: #94a3b8; }
-    .send-btn {
-      width: 36px; height: 36px; border-radius: 10px;
-      border: none; background: #22c55e; color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: opacity 0.2s; flex-shrink: 0;
-    }
-    .send-btn:hover:not(:disabled) { opacity: 0.85; }
-    .send-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+    :host { display: flex; flex-direction: column; flex: 1; height: 100%; min-height: 0; }
+    .chat-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    .chat-layout { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .messages-area { flex: 1; padding: 20px; overflow-y: auto; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+    .empty-icon { width: 48px; height: 48px; margin: 0 auto 12px; color: var(--text-muted); }
+    .empty-icon svg { width: 100%; height: 100%; }
+    .empty-state h3 { font-size: 18px; color: var(--text-primary); margin-bottom: 8px; }
+    .empty-state p { font-size: 13px; margin-bottom: 16px; }
+    .mode-hints { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .mode-hint { padding: 4px 10px; border-radius: 20px; font-size: 11px; background: var(--bg-tertiary); cursor: pointer; transition: all 0.15s; user-select: none; }
+    .mode-hint:hover { background: var(--border-color); }
+    .mode-hint.active { background: var(--accent-color); color: white; }
+    .streaming-indicator { padding: 10px 14px; background: var(--bg-secondary); border-radius: var(--radius-lg); font-size: 13px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px; }
+    .typing-dot { width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%; animation: pulse 1.2s ease-in-out infinite; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+    .input-area { padding: 12px 20px; border-top: 1px solid var(--border-color); background: var(--bg-primary); }
+    .mode-selector { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .mode-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+    .mode-select { width: 140px; }
+    .input-row { display: flex; gap: 8px; }
+    .chat-input { flex: 1; padding: 10px 12px; font-size: 14px; }
+    .loading-spinner-small { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 4px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-banner { padding: 10px 14px; background: #fde8e8; color: #c0392b; border-radius: var(--radius); font-size: 13px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    :host-context([data-theme="dark"]) .error-banner { background: rgba(231,76,60,0.15); color: #f87171; }
   `]
 })
-export class ChatComponent implements OnInit, AfterViewChecked {
+export class ChatComponent implements AfterViewInit, OnInit {
   private chatService = inject(ChatService);
-  private graphService = inject(GraphService);
-  private authService = inject(AuthService);
-  private router = inject(Router);
-
-  @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
+  @ViewChild('scrollArea') scrollArea!: ElementRef;
 
   messages = signal<ChatMessage[]>([]);
-  newMessage = '';
-  selectedMode = 'mix';
-  isLoading = signal(false);
+  query = '';
+  mode = signal<QueryMode>('hybrid');
+  isStreaming = signal(false);
+  streamingContent = signal('');
+  error = signal('');
 
-  availableModes = [
+  availableModes: { value: QueryMode; label: string }[] = [
     { value: 'naive', label: 'Naive' },
     { value: 'local', label: 'Local' },
     { value: 'global', label: 'Global' },
@@ -208,182 +63,101 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     { value: 'bypass', label: 'Bypass' }
   ];
 
-  suggestions = [
-    'What are the key insights from the latest data?',
-    'Summarize the main topics in the knowledge graph',
-    'Find relationships between key entities',
-    'Explain the hybrid search mode'
-  ];
+  constructor() {
+    effect(() => {
+      this.messages();
+      setTimeout(() => this.scrollToBottom(), 50);
+    });
+  }
 
-  ngOnInit(): void {
-    if (!this.authService.isAuthenticated()) {
-      this.router.navigate(['/login']);
-      return;
-    }
+  ngOnInit() {
     this.loadHistory();
   }
 
-  ngAfterViewChecked(): void {
+  ngAfterViewInit() {
     this.scrollToBottom();
   }
 
-  private loadHistory(): void {
-    const history = this.chatService.getConversationHistory();
-    if (history.length > 0) {
-      const restored = history.map((h, i) => ({
-        id: `hist-${Date.now()}-${i}`,
-        role: h.role as 'user' | 'assistant',
-        content: h.content,
-        timestamp: new Date()
-      }));
-      this.messages.set(restored);
-    }
-  }
-
-  clearChat(): void {
-    this.messages.set([]);
-    this.chatService.clearHistory();
-  }
-
-  useSuggestion(text: string): void {
-    this.newMessage = text;
-    this.sendMessage();
-  }
-
   sendMessage(): void {
-    if (!this.newMessage.trim() || this.isLoading()) return;
+    const q = this.query.trim();
+    if (!q || this.isStreaming()) return;
+
+    this.query = '';
+    this.error.set('');
+    this.isStreaming.set(true);
+    this.streamingContent.set('');
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: this.newMessage.trim(),
+      content: q,
       timestamp: new Date()
     };
-    this.messages.update((msgs) => [...msgs, userMsg]);
+    this.messages.update(m => [...m, userMsg]);
 
-    const queryText = this.newMessage.trim();
-    this.newMessage = '';
+    const history = this.messages()
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-10)
+      .map(m => ({ role: m.role, content: m.content }));
 
-    const assistantMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      references: []
-    };
-    this.messages.update((msgs) => [...msgs, assistantMsg]);
-    this.isLoading.set(true);
-
-    const queryRequest: QueryRequest = {
-      query: queryText,
-      mode: this.selectedMode as QueryRequest['mode'],
+    this.chatService.queryStream({
+      query: q,
+      mode: this.mode(),
       stream: true,
       include_references: true,
-      conversation_history: this.messages()
-        .slice(-10)
-        .map((m) => ({ role: m.role, content: m.content }))
-    };
-
-    this.streamResponse(queryRequest, assistantMsg);
-  }
-
-  private async streamResponse(
-    request: QueryRequest,
-    assistantMsg: ChatMessage
-  ): Promise<void> {
-    try {
-      const reader = await this.chatService.queryStream(request);
-      const decoder = new TextDecoder();
-      let fullContent = '';
-
-      const processChunk = async (): Promise<void> => {
-        const result = await reader.read();
-        if (result.done) {
-          this.isLoading.set(false);
-          this.chatService.saveToHistory(this.messages());
-          this.fetchGraphForMessage(request.query, assistantMsg);
-          return;
-        }
-
-        const text = decoder.decode(result.value, { stream: true });
-        const lines = text.split('\n');
-        let hasData = false;
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const data = JSON.parse(line);
-            if (data.response) {
-              fullContent += data.response;
-              assistantMsg.content = fullContent;
-              hasData = true;
-            }
-            if (data.references) {
-              assistantMsg.references = data.references;
-            }
-            if (data.error) {
-              assistantMsg.content += `\n\n**خطا:** ${data.error}`;
-            }
-          } catch {
-            // partial chunk, accumulate
-            if (line.trim()) {
-              fullContent += line.trim();
-              assistantMsg.content = fullContent;
-              hasData = true;
-            }
+      conversation_history: history
+    }).subscribe({
+      next: (chunk) => {
+        this.streamingContent.update(c => c + chunk);
+        this.messages.update(m => {
+          const last = m[m.length - 1];
+          if (last.role === 'assistant') {
+            last.content = this.streamingContent();
           }
-        }
-
-        if (hasData) {
-          this.messages.update((msgs) => [...msgs]);
-        }
-
-        await processChunk();
-      };
-
-      await processChunk();
-    } catch (err) {
-      this.isLoading.set(false);
-      assistantMsg.content += '\n\nError receiving response. Make sure the SciBooksRAG server is running.';
-      this.messages.update((msgs) => [...msgs]);
-    }
-  }
-
-  private async fetchGraphForMessage(query: string, msg: ChatMessage): Promise<void> {
-    try {
-      const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-      if (!words.length) return;
-
-      // Try the first word directly as a label
-      const label = words[0];
-      console.log('[Graph] Fetching for label:', label);
-      const data: any = await firstValueFrom(this.graphService.getKnowledgeGraph(label, 2, 50));
-      console.log('[Graph] API response:', data);
-
-      if (data) {
-        const nodes = data.nodes || data.data?.nodes || [];
-        const edges = data.edges || data.data?.edges || [];
-        if (nodes.length > 0) {
-          msg.graph = { nodes, edges };
-          this.messages.update((msgs) => [...msgs]);
-          console.log('[Graph] Set on message, nodes:', nodes.length);
-        } else {
-          console.log('[Graph] No nodes in response');
+          return [...m];
+        });
+      },
+      error: (err) => {
+        this.isStreaming.set(false);
+        this.error.set(err.message || 'Request failed. Check that the SciBooksRAG server is running.');
+      },
+      complete: () => {
+        this.isStreaming.set(false);
+        if (!this.messages().some(m => m.role === 'assistant' && m.content === this.streamingContent())) {
+          const assistantMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: this.streamingContent() || '(empty response)',
+            timestamp: new Date()
+          };
+          this.messages.update(m => [...m, assistantMsg]);
         }
       }
-    } catch (e) {
-      console.warn('[Graph] Fetch failed:', e);
-    }
+    });
+  }
+
+  clearConversation(): void {
+    this.messages.set([]);
+    this.error.set('');
+    localStorage.removeItem(HISTORY_KEY);
+  }
+
+  private loadHistory(): void {
+    try {
+      const saved = localStorage.getItem(HISTORY_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as ChatMessage[];
+        this.messages.set(parsed);
+      }
+    } catch { /* ignore */ }
   }
 
   private scrollToBottom(): void {
     try {
-      const el = this.messagesContainer?.nativeElement;
-      if (el) {
-        el.scrollTop = el.scrollHeight;
-      }
-    } catch {
-      // ignore
-    }
+      this.scrollArea?.nativeElement.scrollTo({
+        top: this.scrollArea.nativeElement.scrollHeight,
+        behavior: 'smooth'
+      });
+    } catch { /* ignore */ }
   }
 }
