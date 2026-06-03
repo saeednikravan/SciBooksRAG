@@ -46,17 +46,47 @@
       }
 
       @for (msg of messages(); track msg.id) {
-        @if (msg.role === 'assistant' && msg.graphData) {
-          <div class="split-message">
-            <div class="split-text">
+        @if (msg.role === 'user') {
+          <div class="msg-row user-msg-wrapper">
+            <div class="msg-content">
               <app-chat-message [message]="msg" />
             </div>
-            <div class="split-graph">
-              <app-chat-graph-viewer [data]="msg.graphData" />
+            <button class="delete-btn" (click)="deleteMessage(msg.id)" title="Delete message" aria-label="Delete message">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        } @else if (msg.role === 'assistant' && msg.graphData) {
+          <div class="msg-row">
+            <div class="split-message">
+              <div class="split-text">
+                <app-chat-message [message]="msg" />
+              </div>
+              <div class="split-graph">
+                <app-chat-graph-viewer [data]="msg.graphData" />
+              </div>
             </div>
+            <button class="delete-btn" (click)="deleteMessage(msg.id)" title="Delete message" aria-label="Delete message">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
           </div>
         } @else {
-          <app-chat-message [message]="msg" />
+          <div class="msg-row">
+            <div class="msg-content">
+              <app-chat-message [message]="msg" />
+            </div>
+            <button class="delete-btn" (click)="deleteMessage(msg.id)" title="Delete message" aria-label="Delete message">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
         }
       }
 

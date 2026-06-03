@@ -49,6 +49,13 @@ const HISTORY_KEY = 'lightrag_chat_history';
     .split-text ::ng-deep .bubble { max-width: 100% !important; }
     .split-graph { flex: 0 0 calc(55% - 12px); min-width: 0; }
     .split-graph ::ng-deep .graph-body { height: 480px !important; }
+    .msg-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 16px; }
+    .msg-row .msg-content { flex: 1; min-width: 0; }
+    .msg-row .msg-content ::ng-deep .message { margin-bottom: 0 !important; }
+    .delete-btn { flex-shrink: 0; width: 28px; height: 28px; margin-top: 4px; border: 1px solid var(--border-color); border-radius: var(--radius); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-muted); transition: color 0.15s, background 0.15s; }
+    .delete-btn:hover { color: #e74c3c; background: rgba(231,76,60,0.1); border-color: #e74c3c; }
+    .user-msg-wrapper { display: flex; justify-content: flex-end; }
+    .assistant-msg-wrapper { display: flex; justify-content: flex-start; }
   `]
 })
 export class ChatComponent implements AfterViewInit, OnInit {
@@ -146,6 +153,7 @@ export class ChatComponent implements AfterViewInit, OnInit {
           return updated;
         });
         this.isLoading.set(false);
+        this.saveHistory();
       },
       error: (err) => {
         this.isLoading.set(false);
@@ -158,8 +166,32 @@ export class ChatComponent implements AfterViewInit, OnInit {
           }
           return updated;
         });
+        this.saveHistory();
       }
     });
+  }
+
+  deleteMessage(msgId: string): void {
+    this.messages.update(m => {
+      const idx = m.findIndex(msg => msg.id === msgId);
+      if (idx === -1) return m;
+      const msg = m[idx];
+      let deleteCount = 1;
+      // If deleting a user message, also remove the following assistant response
+      if (msg.role === 'user' && idx + 1 < m.length && m[idx + 1].role === 'assistant') {
+        deleteCount = 2;
+      }
+      // If deleting an assistant message, also remove the preceding user message
+      if (msg.role === 'assistant' && idx - 1 >= 0 && m[idx - 1].role === 'user') {
+        const updated = [...m];
+        updated.splice(idx - 1, 2);
+        return updated;
+      }
+      const updated = [...m];
+      updated.splice(idx, deleteCount);
+      return updated;
+    });
+    this.saveHistory();
   }
 
   clearConversation(): void {
@@ -168,12 +200,23 @@ export class ChatComponent implements AfterViewInit, OnInit {
     localStorage.removeItem(HISTORY_KEY);
   }
 
+  private saveHistory(): void {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(this.messages()));
+    } catch { /* ignore */ }
+  }
+
   private loadHistory(): void {
     try {
       const saved = localStorage.getItem(HISTORY_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as ChatMessage[];
-        this.messages.set(parsed);
+        // Restore timestamp strings back to Date objects
+        const restored = parsed.map(msg => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        this.messages.set(restored);
       }
     } catch { /* ignore */ }
   }
