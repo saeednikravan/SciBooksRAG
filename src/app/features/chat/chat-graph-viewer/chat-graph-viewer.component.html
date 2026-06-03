@@ -68,6 +68,34 @@
         </div>
       </div>
     }
+    @if (selectedEdge(); as edge) {
+      <div class="panel">
+        <div class="panel-header">
+          <h3 style="color:#f59e0b">Edge</h3>
+          <button class="close-btn" (click)="clearEdgeSelection()" title="Close">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="prop-row">
+            <span class="prop-name">Source</span>
+            <span class="prop-value clickable" (click)="navigateToNode(edge.src_id)">{{ edge.src_id }}</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-name">Target</span>
+            <span class="prop-value clickable" (click)="navigateToNode(edge.tgt_id)">{{ edge.tgt_id }}</span>
+          </div>
+          <div class="section-title">Keywords</div>
+          <div class="prop-row" style="border-bottom:none;">
+            <span class="prop-value">{{ edge.keywords || '—' }}</span>
+          </div>
+          <div class="section-title">Description</div>
+          <div class="prop-row" style="border-bottom:none;">
+            <span class="prop-value" style="min-width:0; white-space:pre-wrap;">{{ edge.description || 'No description available' }}</span>
+          </div>
+        </div>
+      </div>
+    }
   </div>
   </div>
 </div>

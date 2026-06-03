@@ -7,8 +7,8 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
   imports: [RouterLink, RouterLinkActive],
   templateUrl: './sidebar.component.html',
   styles: [`
-    .sidebar { width: 220px; min-width: 220px; background: var(--bg-secondary); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: width 0.2s ease, min-width 0.2s ease; overflow: hidden; }
-    .sidebar.collapsed { width: 52px; min-width: 52px; }
+    .sidebar { width: 190px; min-width: 190px; background: var(--bg-secondary); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: width 0.2s ease, min-width 0.2s ease; overflow: hidden; }
+    .sidebar.collapsed { width: 48px; min-width: 48px; }
     .sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px; border-bottom: 1px solid var(--border-color); gap: 8px; }
     .logo-text { font-weight: 700; font-size: 15px; color: var(--text-primary); white-space: nowrap; }
     .toggle-btn { flex-shrink: 0; }

@@ -28,9 +28,9 @@ const HISTORY_KEY = 'lightrag_chat_history';
     }
 
     .messages-inner {
-      max-width: 800px;
+      max-width: 1200px;
       margin: 0 auto;
-      padding: 24px 24px 120px;
+      padding: 24px 32px 120px;
     }
 
     /* Empty state - centered, minimal */
@@ -100,8 +100,9 @@ const HISTORY_KEY = 'lightrag_chat_history';
       gap: 12px;
       font-size: 14px;
       color: var(--text-tertiary);
-      max-width: 800px;
-      margin: 0 auto;
+      max-width: 1200px;
+      margin-left: auto;
+      margin-right: auto;
     }
     .typing-dot {
       width: 8px;
@@ -119,7 +120,7 @@ const HISTORY_KEY = 'lightrag_chat_history';
       display: flex;
       gap: 12px;
       margin-bottom: 24px;
-      max-width: 800px;
+      max-width: 1200px;
       margin-left: auto;
       margin-right: auto;
     }
@@ -168,16 +169,16 @@ const HISTORY_KEY = 'lightrag_chat_history';
       width: 100%;
     }
     .split-text {
-      flex: 0 0 40%;
+      flex: 0 0 35%;
       min-width: 0;
     }
     .split-text ::ng-deep .message { margin-bottom: 0 !important; }
     .split-text ::ng-deep .bubble { max-width: 100% !important; }
     .split-graph {
-      flex: 0 0 calc(60% - 16px);
+      flex: 1;
       min-width: 0;
     }
-    .split-graph ::ng-deep .graph-body { height: 480px !important; }
+    .split-graph ::ng-deep .graph-body { height: 560px !important; }
 
     /* Error banner */
     .error-banner {
@@ -186,12 +187,14 @@ const HISTORY_KEY = 'lightrag_chat_history';
       color: var(--danger-color);
       border-radius: var(--radius-lg);
       font-size: 13px;
-      margin: 0 auto 24px;
+      margin: 0 0 24px;
       display: flex;
       align-items: center;
       gap: 10px;
       border: 1px solid rgba(198,69,69,0.12);
-      max-width: 800px;
+      max-width: 1200px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     /* Input area - fixed bottom, centered card */

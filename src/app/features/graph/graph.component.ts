@@ -437,7 +437,26 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
       .append('path')
       .attr('stroke', '#999').attr('stroke-width', (d: any) => Math.max(2, (d.weight || 1) * 3))
       .attr('stroke-opacity', 0.4).attr('fill', 'none')
-      .style('transition', 'stroke-opacity 0.2s');
+      .style('transition', 'stroke-opacity 0.2s')
+      .style('cursor', 'pointer')
+      .on('click', (event: any, d: any) => {
+        event.stopPropagation();
+        this.selectEdge(d.source.id || d.source, d.target.id || d.target);
+      })
+      .on('mouseenter', (event: any, d: any) => {
+        event.stopPropagation();
+        d3.select(event.currentTarget).attr('stroke-opacity', 0.9).attr('stroke', '#f59e0b');
+      })
+      .on('mouseleave', (event: any, d: any) => {
+        event.stopPropagation();
+        const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+        const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+        const isActive = this.selectedEdge() && (
+          `${this.selectedEdge()!.source}|${this.selectedEdge()!.target}` === key ||
+          `${this.selectedEdge()!.target}|${this.selectedEdge()!.source}` === key
+        );
+        d3.select(event.currentTarget).attr('stroke-opacity', isActive ? 0.9 : 0.4).attr('stroke', isActive ? '#f59e0b' : '#999');
+      });
     this.edgeElements = linkElements;
 
     const edgeLabels = g.append('g').attr('class', 'edge-labels')
@@ -595,10 +614,25 @@ this.simulation = d3.forceSimulation(this.nodeData)
     this.nodeElements.style('opacity', (d: any) => neighborIds.has(d.id) ? 1 : 0.15);
     this.nodeElements.selectAll('text').style('display', (d: any) => neighborIds.has(d.id) ? null : 'none');
 
+    const selEdge = this.selectedEdge();
     this.edgeElements.style('opacity', (d: any) => {
       const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
       const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+      if (selEdge) {
+        const selKey = `${selEdge.source}|${selEdge.target}`;
+        const selRev = `${selEdge.target}|${selEdge.source}`;
+        return (key === selKey || rev === selRev) ? 1 : 0.04;
+      }
       return connEdges.has(key) || connEdges.has(rev) ? 0.7 : 0.04;
+    }).style('stroke', (d: any) => {
+      const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+      const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+      if (selEdge) {
+        const selKey = `${selEdge.source}|${selEdge.target}`;
+        const selRev = `${selEdge.target}|${selEdge.source}`;
+        return (key === selKey || rev === selRev) ? '#f59e0b' : '#999';
+      }
+      return connEdges.has(key) || connEdges.has(rev) ? '#f59e0b' : '#999';
     });
   }
 

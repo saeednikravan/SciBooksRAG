@@ -54,7 +54,7 @@ const COLOR_MAP: Record<string, string> = {
     .graph-header { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); position: relative; z-index: 10; }
     .graph-header h4 { font-size: 16px; font-weight: 600; margin: 0; color: var(--text-primary); }
     .graph-header span { font-size: 13px; color: var(--text-secondary); }
-    .graph-body { width: 100%; height: 280px; position: relative; overflow: hidden; transition: height 0.3s ease; }
+    .graph-body { width: 100%; height: 560px; position: relative; overflow: hidden; transition: height 0.3s ease; }
     .graph-wrapper.expanded .graph-body { flex: 1; height: auto; }
     .graph-body svg { display: block; width: 100%; height: 100%; }
     .expand-btn { width: 30px; height: 30px; border: none; background: transparent; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); flex-shrink: 0; transition: all var(--transition); }
@@ -84,6 +84,7 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
   graphContainer = viewChild<ElementRef<HTMLElement>>('graphContainer');
 
   selectedNode = signal<QueryDataEntity | null>(null);
+  selectedEdge = signal<{ src_id: string; tgt_id: string; description: string; keywords: string } | null>(null);
   hoveredNode = signal<string | null>(null);
   isExpanded = signal(false);
 
@@ -272,7 +273,25 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
       .append('path')
       .attr('stroke', '#666')
        .attr('stroke-width', (d: any) => Math.max(5, d.weight * 6))
-       .attr('stroke-opacity', 0.6).attr('fill', 'none');
+       .attr('stroke-opacity', 0.6).attr('fill', 'none')
+       .style('cursor', 'pointer')
+       .on('click', (event: any, d: any) => {
+         event.stopPropagation();
+         const rel = data.relationships.find(r => r.src_id === (d.source.id || d.source) && r.tgt_id === (d.target.id || d.target));
+         if (rel) {
+           this.selectedEdge.set({ src_id: rel.src_id, tgt_id: rel.tgt_id, description: rel.description || '', keywords: rel.keywords || '' });
+           this.selectedNode.set(null);
+         }
+         this.updateHighlights();
+       })
+       .on('mouseenter', (event: any, d: any) => {
+         event.stopPropagation();
+         d3.select(event.currentTarget).attr('stroke-opacity', 1).attr('stroke', '#f59e0b');
+       })
+       .on('mouseleave', (event: any, d: any) => {
+         event.stopPropagation();
+         d3.select(event.currentTarget).attr('stroke-opacity', 0.6).attr('stroke', '#666');
+       });
 
     const nodeGroups = g.append('g').selectAll('g').data(this.nodeData).enter()
       .append('g').style('cursor', 'pointer')
@@ -281,6 +300,7 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
         const entity = data.entities.find(n => n.entity_name === d.id);
         if (entity) {
           this.selectedNode.set(entity);
+          this.selectedEdge.set(null);
           this.hoveredNode.set(null);
         }
         this.updateHighlights();
@@ -325,6 +345,7 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
 
     svg.on('click', () => {
       this.selectedNode.set(null);
+      this.selectedEdge.set(null);
       this.hoveredNode.set(null);
       this.updateHighlights();
     });
@@ -394,13 +415,24 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
     this.nodeElements.style('opacity', (d: any) => neighborIds.has(d.id) ? 1 : 0.15);
     this.nodeElements.selectAll('text').style('display', (d: any) => neighborIds.has(d.id) ? null : 'none');
 
+    const selEdge = this.selectedEdge();
     this.edgeElements.style('opacity', (d: any) => {
       const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
       const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+      if (selEdge) {
+        const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
+        const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
+        return (key === selKey || rev === selRev) ? 1 : 0.1;
+      }
       return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? 0.9 : 0.15;
     }).style('stroke', (d: any) => {
       const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
       const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+      if (selEdge) {
+        const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
+        const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
+        return (key === selKey || rev === selRev) ? '#f59e0b' : '#666';
+      }
       return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? '#f59e0b' : '#666';
     });
   }
@@ -409,13 +441,20 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
     const entity = this.data().entities.find(n => n.entity_name === entityName);
     if (entity) {
       this.selectedNode.set(entity);
+      this.selectedEdge.set(null);
       this.hoveredNode.set(null);
       this.updateHighlights();
     }
   }
 
+  clearEdgeSelection() {
+    this.selectedEdge.set(null);
+    this.updateHighlights();
+  }
+
   clearSelection() {
     this.selectedNode.set(null);
+    this.selectedEdge.set(null);
     this.hoveredNode.set(null);
     this.updateHighlights();
   }
