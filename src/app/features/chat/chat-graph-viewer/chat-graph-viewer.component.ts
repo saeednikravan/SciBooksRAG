@@ -1,4 +1,4 @@
-import { Component, ElementRef, input, effect, viewChild, AfterViewInit, OnDestroy, signal, computed } from '@angular/core';
+import { Component, ElementRef, input, effect, viewChild, AfterViewInit, OnDestroy, signal, computed, HostListener } from '@angular/core';
 import { QueryDataResponse, QueryDataEntity } from '../../../core/models/chat.model';
 import * as d3 from 'd3';
 
@@ -14,13 +14,53 @@ const COLOR_MAP: Record<string, string> = {
   standalone: true,
   templateUrl: './chat-graph-viewer.component.html',
   styles: [`
-    :host { display: block; }
-    .graph-wrapper { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-primary); overflow: hidden; position: relative; }
-    .graph-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); }
-    .graph-header h4 { font-size: 13px; font-weight: 600; margin: 0; color: var(--text-primary); }
-    .graph-header span { font-size: 11px; color: var(--text-secondary); }
-    .graph-body { width: 100%; height: 280px; position: relative; overflow: hidden; }
+    :host { display: block; position: relative; }
+    .graph-content {
+      width: 100%;
+      max-width: 1200px;
+      height: 80vh;
+      background: var(--bg-primary);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .graph-wrapper { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-primary); overflow: hidden; position: relative; transition: all 0.3s ease; }
+    .graph-wrapper.expanded {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10000;
+      border-radius: 0;
+      box-shadow: none;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      animation: modalIn 0.3s ease;
+    }
+    .graph-wrapper.expanded .graph-content {
+      animation: modalIn 0.3s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .graph-header { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); position: relative; z-index: 10; }
+    .graph-header h4 { font-size: 16px; font-weight: 600; margin: 0; color: var(--text-primary); }
+    .graph-header span { font-size: 13px; color: var(--text-secondary); }
+    .graph-body { width: 100%; height: 280px; position: relative; overflow: hidden; transition: height 0.3s ease; }
+    .graph-wrapper.expanded .graph-body { flex: 1; height: auto; }
     .graph-body svg { display: block; width: 100%; height: 100%; }
+    .expand-btn { width: 30px; height: 30px; border: none; background: transparent; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); flex-shrink: 0; transition: all var(--transition); }
+    .expand-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .close-fullscreen-btn { margin-left: auto; width: 34px; height: 34px; border: none; background: var(--bg-tertiary); cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); flex-shrink: 0; transition: all var(--transition); }
+    .close-fullscreen-btn:hover { background: var(--danger-color); color: white; }
     .panel { position: absolute; top: 8px; right: 8px; z-index: 20; width: 260px; max-height: calc(100% - 16px); background: color-mix(in srgb, var(--bg-primary) 95%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; font-size: 12px; overflow: hidden; }
     .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
     .panel-header h3 { font-size: 12px; font-weight: 600; margin: 0; }
@@ -45,6 +85,19 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
 
   selectedNode = signal<QueryDataEntity | null>(null);
   hoveredNode = signal<string | null>(null);
+  isExpanded = signal(false);
+
+  toggleExpand() {
+    this.isExpanded.update(v => !v);
+    setTimeout(() => this.renderGraph(), 100);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    if (this.isExpanded()) {
+      this.toggleExpand();
+    }
+  }
 
   selectedNodeNeighbors = computed(() => {
     const sel = this.selectedNode();
@@ -75,6 +128,37 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
   private nodeElements: any = null;
   private edgeElements: any = null;
   private zoomBehavior: any = null;
+
+   private fitGraph(svg: any, width: number, height: number) {
+      const padding = 60;
+      const nodes = this.nodeData;
+      if (!nodes.length) return;
+
+      const minX = Math.min(...nodes.map(n => n.x));
+      const maxX = Math.max(...nodes.map(n => n.x));
+      const minY = Math.min(...nodes.map(n => n.y));
+      const maxY = Math.max(...nodes.map(n => n.y));
+
+      const graphWidth = maxX - minX || width;
+      const graphHeight = maxY - minY || height;
+
+      const scale = Math.min(
+        (width - padding * 2) / graphWidth,
+        (height - padding * 2) / graphHeight,
+        6
+      );
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      const tx = width / 2 - centerX * scale;
+      const ty = height / 2 - centerY * scale;
+
+      svg.transition().duration(600).call(
+        this.zoomBehavior.transform,
+        d3.zoomIdentity.translate(tx, ty).scale(Math.max(scale, 0.3))
+      );
+    }
 
   constructor() {
     effect(() => {
@@ -177,8 +261,8 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
     const g = svg.append('g').attr('class', 'main-group');
     this.mainGroup = g;
 
-    this.zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 6])
+ this.zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+       .scaleExtent([0.05, 10])
       .on('zoom', (e: any) => {
         g.attr('transform', e.transform);
       });
@@ -186,9 +270,9 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
 
     this.edgeElements = g.append('g').selectAll('path').data(this.edgeData).enter()
       .append('path')
-      .attr('stroke', '#999')
-      .attr('stroke-width', (d: any) => Math.max(3, d.weight * 4))
-      .attr('stroke-opacity', 0.35).attr('fill', 'none');
+      .attr('stroke', '#666')
+       .attr('stroke-width', (d: any) => Math.max(5, d.weight * 6))
+       .attr('stroke-opacity', 0.6).attr('fill', 'none');
 
     const nodeGroups = g.append('g').selectAll('g').data(this.nodeData).enter()
       .append('g').style('cursor', 'pointer')
@@ -266,11 +350,8 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
       });
 
     setTimeout(() => {
-      svg.transition().duration(300).call(
-        this.zoomBehavior.transform,
-        d3.zoomIdentity.translate(0, 0).scale(Math.min(1, 600 / Math.max(width, height)))
-      );
-    }, 100);
+      this.fitGraph(svg, width, height);
+    }, 800);
   }
 
   private updateHighlights() {
@@ -316,11 +397,11 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
     this.edgeElements.style('opacity', (d: any) => {
       const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
       const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
-      return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? 0.7 : 0.04;
+      return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? 0.9 : 0.15;
     }).style('stroke', (d: any) => {
       const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
       const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
-      return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? '#f59e0b' : '#999';
+      return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? '#f59e0b' : '#666';
     });
   }
 
