@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { ChatMessage, QueryRequest, QueryResponse } from '../models/chat.model';
+import { ChatMessage, QueryRequest, QueryDataRequest, QueryResponse, QueryDataResponse } from '../models/chat.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -56,6 +56,12 @@ export class ChatService {
         read();
       }).catch(err => observer.error(err));
     });
+  }
+
+  queryData(
+    request: QueryDataRequest
+  ): Observable<{ status: string; data: QueryDataResponse }> {
+    return this.api.post<{ status: string; data: QueryDataResponse }>('/query/data', request);
   }
 
   getConversationHistory(): Array<{ role: string; content: string }> {

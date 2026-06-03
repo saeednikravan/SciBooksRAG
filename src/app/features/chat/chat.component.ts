@@ -1,7 +1,9 @@
 import { Component, inject, signal, ViewChild, ElementRef, AfterViewInit, OnInit, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import { HeaderComponent } from '../../layout/header/header.component';
 import { ChatMessageComponent } from './chat-message/chat-message.component';
+import { ChatGraphViewerComponent } from './chat-graph-viewer/chat-graph-viewer.component';
 import { ChatService } from '../../core/services/chat.service';
 import { ChatMessage, QueryMode } from '../../core/models/chat.model';
 
@@ -10,7 +12,7 @@ const HISTORY_KEY = 'lightrag_chat_history';
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, HeaderComponent, ChatMessageComponent],
+  imports: [FormsModule, HeaderComponent, ChatMessageComponent, ChatGraphViewerComponent],
   templateUrl: './chat.component.html',
   styles: [`
     :host { display: flex; flex-direction: column; flex: 1; height: 100%; min-height: 0; }
@@ -41,6 +43,12 @@ const HISTORY_KEY = 'lightrag_chat_history';
     @keyframes spin { to { transform: rotate(360deg); } }
     .error-banner { padding: 10px 14px; background: #fde8e8; color: #c0392b; border-radius: var(--radius); font-size: 13px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     :host-context([data-theme="dark"]) .error-banner { background: rgba(231,76,60,0.15); color: #f87171; }
+    .split-message { display: flex; gap: 12px; margin-bottom: 16px; min-height: 0; }
+    .split-text { flex: 0 0 45%; min-width: 0; }
+    .split-text ::ng-deep .message { margin-bottom: 0 !important; }
+    .split-text ::ng-deep .bubble { max-width: 100% !important; }
+    .split-graph { flex: 0 0 calc(55% - 12px); min-width: 0; }
+    .split-graph ::ng-deep .graph-body { height: 480px !important; }
   `]
 })
 export class ChatComponent implements AfterViewInit, OnInit {
@@ -50,8 +58,7 @@ export class ChatComponent implements AfterViewInit, OnInit {
   messages = signal<ChatMessage[]>([]);
   query = '';
   mode = signal<QueryMode>('hybrid');
-  isStreaming = signal(false);
-  streamingContent = signal('');
+  isLoading = signal(false);
   error = signal('');
 
   availableModes: { value: QueryMode; label: string }[] = [
@@ -80,12 +87,11 @@ export class ChatComponent implements AfterViewInit, OnInit {
 
   sendMessage(): void {
     const q = this.query.trim();
-    if (!q || this.isStreaming()) return;
+    if (!q || this.isLoading()) return;
 
     this.query = '';
     this.error.set('');
-    this.isStreaming.set(true);
-    this.streamingContent.set('');
+    this.isLoading.set(true);
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -95,43 +101,63 @@ export class ChatComponent implements AfterViewInit, OnInit {
     };
     this.messages.update(m => [...m, userMsg]);
 
+    const assistantMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      timestamp: new Date()
+    };
+    this.messages.update(m => [...m, assistantMsg]);
+
     const history = this.messages()
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-10)
       .map(m => ({ role: m.role, content: m.content }));
 
-    this.chatService.queryStream({
-      query: q,
-      mode: this.mode(),
-      stream: true,
-      include_references: true,
-      conversation_history: history
+    const currentMode = this.mode();
+
+    forkJoin({
+      text: this.chatService.query({
+        query: q,
+        mode: currentMode,
+        include_references: true,
+        response_type: 'Multiple Paragraphs',
+        top_k: 10,
+        conversation_history: history
+      }),
+      graph: this.chatService.queryData({
+        query: q,
+        mode: currentMode,
+        top_k: 10,
+        chunk_top_k: 10,
+        conversation_history: history,
+        history_turns: history.length
+      })
     }).subscribe({
-      next: (chunk) => {
-        this.streamingContent.update(c => c + chunk);
+      next: (result) => {
         this.messages.update(m => {
-          const last = m[m.length - 1];
-          if (last.role === 'assistant') {
-            last.content = this.streamingContent();
+          const updated = [...m];
+          const last = updated[updated.length - 1];
+          if (last && last.id === assistantMsg.id) {
+            last.content = result.text.response || '(empty response)';
+            last.references = result.text.references;
+            last.graphData = result.graph?.data || null;
           }
-          return [...m];
+          return updated;
         });
+        this.isLoading.set(false);
       },
       error: (err) => {
-        this.isStreaming.set(false);
+        this.isLoading.set(false);
         this.error.set(err.message || 'Request failed. Check that the SciBooksRAG server is running.');
-      },
-      complete: () => {
-        this.isStreaming.set(false);
-        if (!this.messages().some(m => m.role === 'assistant' && m.content === this.streamingContent())) {
-          const assistantMsg: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: this.streamingContent() || '(empty response)',
-            timestamp: new Date()
-          };
-          this.messages.update(m => [...m, assistantMsg]);
-        }
+        this.messages.update(m => {
+          const updated = [...m];
+          const last = updated[updated.length - 1];
+          if (last && last.id === assistantMsg.id) {
+            last.content = `Error: ${err.message || 'Request failed'}`;
+          }
+          return updated;
+        });
       }
     });
   }

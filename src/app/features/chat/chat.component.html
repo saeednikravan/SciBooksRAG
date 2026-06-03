@@ -46,10 +46,21 @@
       }
 
       @for (msg of messages(); track msg.id) {
-        <app-chat-message [message]="msg" />
+        @if (msg.role === 'assistant' && msg.graphData) {
+          <div class="split-message">
+            <div class="split-text">
+              <app-chat-message [message]="msg" />
+            </div>
+            <div class="split-graph">
+              <app-chat-graph-viewer [data]="msg.graphData" />
+            </div>
+          </div>
+        } @else {
+          <app-chat-message [message]="msg" />
+        }
       }
 
-      @if (isStreaming()) {
+      @if (isLoading()) {
         <div class="streaming-indicator" role="status" aria-live="polite">
           <span class="typing-dot" aria-hidden="true"></span>
           <span class="typing-dot" aria-hidden="true"></span>
@@ -68,7 +79,7 @@
           class="input mode-select"
           [ngModel]="mode()"
           (ngModelChange)="mode.set($event)"
-          [disabled]="isStreaming()"
+          [disabled]="isLoading()"
         >
           @for (m of availableModes; track m.value) {
             <option [value]="m.value">{{ m.label }}</option>
@@ -82,15 +93,15 @@
           [(ngModel)]="query"
           (keydown.enter)="sendMessage()"
           placeholder="Ask a question..."
-          [disabled]="isStreaming()"
+          [disabled]="isLoading()"
           aria-label="Chat message"
         />
         <button
           class="btn btn-primary"
           (click)="sendMessage()"
-          [disabled]="isStreaming() || !query.trim()"
+          [disabled]="isLoading() || !query.trim()"
         >
-          @if (isStreaming()) {
+          @if (isLoading()) {
             <span class="loading-spinner-small" aria-hidden="true"></span>
             Sending...
           } @else {

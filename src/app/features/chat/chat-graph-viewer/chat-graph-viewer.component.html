@@ -1,0 +1,46 @@
+<div class="graph-wrapper">
+  <div class="graph-header">
+    <h4>Knowledge Graph</h4>
+    <span>{{ data().entities.length }} entities, {{ data().relationships.length }} relationships</span>
+  </div>
+  <div class="graph-body" #graphContainer>
+    @if (selectedNode(); as node) {
+      <div class="panel">
+        <div class="panel-header">
+          <h3>{{ node.entity_name }}</h3>
+          <button class="close-btn" (click)="clearSelection()" title="Close">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="prop-row">
+            <span class="prop-name">Type</span>
+            <span class="prop-value">{{ node.entity_type || '—' }}</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-name">Degree</span>
+            <span class="prop-value">{{ selectedNodeNeighbors().length }}</span>
+          </div>
+          <div class="section-title">Description</div>
+          <div class="prop-row" style="border-bottom:none;">
+            <span class="prop-value" style="min-width:0; white-space:pre-wrap;">{{ node.description || 'No description available' }}</span>
+          </div>
+          @if (selectedNodeNeighbors().length) {
+            <div class="section-title">Connected Entities</div>
+            <div class="neighbors-list">
+              @for (nb of selectedNodeNeighbors(); track nb.id) {
+                <span class="neighbor-chip" (click)="navigateToNode(nb.id)" title="{{ nb.description || nb.id }}">{{ nb.label }}</span>
+              }
+            </div>
+          }
+          @if (selectedNodeChunks().length) {
+            <div class="section-title">Related Chunks</div>
+            @for (chunk of selectedNodeChunks(); track chunk.chunk_id) {
+              <div class="chunk-box">{{ chunk.content }}</div>
+            }
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>
