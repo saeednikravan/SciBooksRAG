@@ -211,37 +211,46 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
       pointer-events: auto;
     }
 
-    .mode-selector {
+    .mode-toggle {
       display: flex;
-      align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 0;
       margin-bottom: 12px;
-    }
-
-    .mode-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .mode-select {
-      width: 150px;
-      padding: 6px 30px 6px 12px;
-      font-size: 12px;
+      background: var(--bg-secondary);
       border-radius: var(--radius-pill);
       border: 1px solid var(--border-color);
-      background: var(--bg-secondary);
+      padding: 3px;
+      width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .mode-btn {
+      padding: 6px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      border-radius: var(--radius-pill);
+      background: transparent;
       color: var(--text-secondary);
       cursor: pointer;
       transition: all var(--transition);
+      white-space: nowrap;
     }
 
-    .mode-select:focus {
-      border-color: var(--accent-color);
-      box-shadow: 0 0 0 2px rgba(204, 120, 92, 0.15);
+    .mode-btn:hover:not(:disabled) {
+      color: var(--text-primary);
+    }
+
+    .mode-btn.active {
+      background: var(--accent-color);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .mode-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .input-row {
@@ -349,17 +358,13 @@ export class ChatComponent implements AfterViewInit, OnInit {
 
   messages = signal<ChatMessage[]>([]);
   query = '';
-  mode = signal<QueryMode>('hybrid');
+  mode = signal<QueryMode>('mix');
   isLoading = signal(false);
   error = signal('');
 
   availableModes: { value: QueryMode; label: string }[] = [
-    { value: 'naive', label: 'Naive' },
-    { value: 'local', label: 'Local' },
-    { value: 'global', label: 'Global' },
-    { value: 'hybrid', label: 'Hybrid' },
-    { value: 'mix', label: 'Mix' },
-    { value: 'bypass', label: 'Bypass' }
+    { value: 'mix', label: 'With knowledge' },
+    { value: 'bypass', label: 'Without knowledge' }
   ];
 
   constructor() {
