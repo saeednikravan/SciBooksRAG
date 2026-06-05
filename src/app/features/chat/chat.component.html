@@ -62,11 +62,11 @@
           } @else if (msg.role === 'assistant' && msg.graphData) {
             <div class="msg-row">
               <div class="split-message">
-                <div class="split-text">
-                  <app-chat-message [message]="msg" />
-                </div>
                 <div class="split-graph">
                   <app-chat-graph-viewer [data]="msg.graphData" />
+                </div>
+                <div class="split-text">
+                  <app-chat-message [message]="msg" />
                 </div>
               </div>
               <button class="delete-btn" (click)="deleteMessage(msg.id)" title="Delete message" aria-label="Delete message">
