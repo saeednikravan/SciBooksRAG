@@ -5,6 +5,7 @@ import { HeaderComponent } from '../../layout/header/header.component';
 import { ChatMessageComponent } from './chat-message/chat-message.component';
 import { ChatGraphViewerComponent } from './chat-graph-viewer/chat-graph-viewer.component';
 import { ChatService } from '../../core/services/chat.service';
+import { ChatStateService } from '../../core/services/chat-state.service';
 import { ChatMessage, QueryMode, StreamChunk } from '../../core/models/chat.model';
 
 const HISTORY_KEY = 'scibooksrag_chat_history';
@@ -364,6 +365,7 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
 })
 export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
   private chatService = inject(ChatService);
+  private chatState = inject(ChatStateService);
   @ViewChild('scrollArea') scrollArea!: ElementRef;
 
   messages = signal<ChatMessage[]>([]);
@@ -382,7 +384,8 @@ export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
 
   constructor() {
     effect(() => {
-      this.messages();
+      const msgs = this.messages();
+      this.chatState.messageCount.set(msgs.length);
       setTimeout(() => this.scrollToBottom(), 50);
     });
   }

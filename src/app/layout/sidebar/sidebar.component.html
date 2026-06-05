@@ -1,49 +1,89 @@
 <aside class="sidebar" [class.collapsed]="collapsed()">
   <div class="sidebar-header">
-    @if (!collapsed()) {
-      <span class="logo-text">SciBooksRAG</span>
-    }
-    <button class="btn btn-icon toggle-btn" (click)="toggle()" [attr.aria-label]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
-      @if (collapsed()) {
-        <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <circle cx="19" cy="5" r="2"></circle>
+          <circle cx="5" cy="5" r="2"></circle>
+          <circle cx="19" cy="19" r="2"></circle>
+          <circle cx="5" cy="19" r="2"></circle>
+          <line x1="12" y1="9" x2="12" y2="5"></line>
+          <line x1="14.5" y1="13.5" x2="17" y2="17"></line>
+          <line x1="9.5" y1="13.5" x2="7" y2="17"></line>
         </svg>
-      } @else {
-        <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
+      </div>
+      @if (!collapsed()) {
+        <span class="brand-name">SciBooksRAG</span>
       }
+    </div>
+    <button class="collapse-btn" (click)="toggle()" [attr.aria-label]="collapsed() ? 'Expand' : 'Collapse'">
+      <svg class="collapse-icon" [class.flip]="collapsed()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
     </button>
+  </div>
+
+  <div class="user-section">
+    <div class="user-avatar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    </div>
+    @if (!collapsed()) {
+      <div class="user-info">
+        <span class="user-name">User</span>
+        <span class="user-status">Online</span>
+      </div>
+    }
   </div>
 
   <nav class="sidebar-nav">
     <a routerLink="/chat" routerLinkActive="active" class="nav-item" aria-label="Chat">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
+      <div class="nav-icon-wrapper">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+      </div>
       @if (!collapsed()) {
         <span class="nav-label">Chat</span>
       }
+      @if (!collapsed() && chatState.messageCount() > 0) {
+        <span class="nav-badge">{{ chatState.messageCount() / 2 }}</span>
+      }
     </a>
     <a routerLink="/graph" routerLinkActive="active" class="nav-item" aria-label="Knowledge Graph">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <circle cx="19" cy="5" r="2"></circle>
-        <circle cx="5" cy="5" r="2"></circle>
-        <circle cx="19" cy="19" r="2"></circle>
-        <circle cx="5" cy="19" r="2"></circle>
-        <line x1="12" y1="9" x2="12" y2="5"></line>
-        <line x1="14.5" y1="13.5" x2="17" y2="17"></line>
-        <line x1="9.5" y1="13.5" x2="7" y2="17"></line>
-        <line x1="5.5" y1="7" x2="5" y2="5"></line>
-        <line x1="18.5" y1="7" x2="19" y2="5"></line>
-      </svg>
+      <div class="nav-icon-wrapper">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <circle cx="19" cy="5" r="2"></circle>
+          <circle cx="5" cy="5" r="2"></circle>
+          <circle cx="19" cy="19" r="2"></circle>
+          <circle cx="5" cy="19" r="2"></circle>
+          <line x1="12" y1="9" x2="12" y2="5"></line>
+          <line x1="14.5" y1="13.5" x2="17" y2="17"></line>
+          <line x1="9.5" y1="13.5" x2="7" y2="17"></line>
+        </svg>
+      </div>
       @if (!collapsed()) {
         <span class="nav-label">Knowledge Graph</span>
       }
     </a>
   </nav>
+
+  <div class="sidebar-divider"></div>
+
+  <div class="sidebar-footer">
+    <button class="footer-btn" (click)="logout()" aria-label="Logout">
+      <svg class="footer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+      @if (!collapsed()) {
+        <span class="footer-label">Sign Out</span>
+      }
+    </button>
+  </div>
 </aside>
