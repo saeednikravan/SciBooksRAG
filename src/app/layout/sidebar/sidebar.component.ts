@@ -2,6 +2,7 @@ import { Component, signal, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatStateService } from '../../core/services/chat-state.service';
+import { ThemeService } from '../../core/services/theme.service';
 
 @Component({
   selector: 'app-sidebar',
@@ -334,6 +335,11 @@ import { ChatStateService } from '../../core/services/chat-state.service';
       color: var(--danger-color, #c64545);
     }
 
+    .theme-btn:hover {
+      background: var(--bg-tertiary, #e9ecef) !important;
+      color: var(--text-primary, #1a1a2e) !important;
+    }
+
     .footer-icon {
       width: 18px;
       height: 18px;
@@ -351,6 +357,7 @@ export class SidebarComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
   chatState = inject(ChatStateService);
+  theme = inject(ThemeService);
 
   toggle() {
     this.collapsed.update(v => !v);

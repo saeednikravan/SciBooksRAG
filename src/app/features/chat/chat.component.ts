@@ -281,6 +281,7 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
       max-height: 150px;
       resize: none;
       background: transparent;
+      color: var(--text-primary);
       line-height: 1.5;
       outline: none;
     }
