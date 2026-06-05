@@ -7,6 +7,7 @@ export interface ChatMessage {
   timestamp: Date;
   references?: ReferenceItem[];
   graphData?: QueryDataResponse | null;
+  processingInfo?: string;
 }
 
 export interface QueryDataEntity {
@@ -54,6 +55,15 @@ export interface ReferenceItem {
   reference_id: string;
   file_path: string;
   content?: string[];
+}
+
+export interface StreamChunk {
+  type: 'chunk' | 'references' | 'done' | 'error' | 'info';
+  data?: {
+    content?: string;
+    references?: ReferenceItem[];
+    graph_data?: QueryDataResponse;
+  };
 }
 
 export interface QueryRequest {

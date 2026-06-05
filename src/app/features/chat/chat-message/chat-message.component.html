@@ -1,45 +1,103 @@
-<div class="message" [class.user-message]="message().role === 'user'" [class.assistant-message]="message().role === 'assistant'">
-  <div class="avatar" aria-hidden="true">
-    @if (message().role === 'user') {
-      <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-        <circle cx="12" cy="7" r="4"></circle>
-      </svg>
-    } @else {
-      <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<div class="message" [class.is-user]="message().role === 'user'" [class.is-assistant]="message().role === 'assistant'">
+  @if (message().role === 'assistant') {
+    <div class="msg-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="3" width="18" height="14" rx="2"></rect>
         <path d="M12 8v4"></path>
         <path d="M12 16h.01"></path>
       </svg>
-    }
-  </div>
-  <div class="bubble">
-    <button class="copy-btn" (click)="copyContent()" title="Copy" aria-label="Copy message">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="9" y="9" width="13" height="13" rx="2"></rect>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-      </svg>
-    </button>
-    <div class="content" [innerHTML]="message().content | markdown"></div>
+    </div>
+  }
 
-    @if (message().references?.length) {
-      <details class="references">
-        <summary>References ({{ message().references!.length }})</summary>
-        <ol>
-          @for (ref of message().references; track ref.reference_id) {
-            <li>
-              <span class="ref-file">{{ ref.file_path }}</span>
-              @if (ref.content?.length) {
-                <ul class="ref-content">
-                  @for (c of ref.content; track c) {
-                    <li>{{ c }}</li>
-                  }
-                </ul>
-              }
-            </li>
-          }
-        </ol>
-      </details>
+  <div class="msg-body">
+    <div class="msg-label">
+      @if (message().role === 'assistant') {
+        <span class="label-text">Assistant</span>
+      } @else {
+        <span class="label-text">You</span>
+      }
+      <span class="msg-time">{{ message().timestamp | date:'HH:mm' }}</span>
+    </div>
+
+    @if (thinkContent && message().role === 'assistant') {
+      <div class="think-section" [class.expanded]="isThinkExpanded()">
+        <div class="think-header">
+          <svg class="think-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <span class="think-label">Reasoning</span>
+          <button class="think-toggle" (click)="toggleThink()">
+            <svg class="chevron" [class.expanded]="isThinkExpanded()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+            @if (isThinkExpanded()) { Show less } @else { Show more }
+          </button>
+        </div>
+        <div class="think-body" [innerHTML]="thinkContent | markdown"></div>
+      </div>
     }
+
+    <div class="bubble">
+      @if (processingInfo() && message().role === 'assistant') {
+        <div class="processing-info">
+          <div class="processing-header">
+            <button class="processing-toggle" (click)="toggleProcessing()">
+              <svg class="chevron" [class.expanded]="isProcessingExpanded()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+              @if (isProcessingExpanded()) { Show Less } @else { Show More }
+            </button>
+          </div>
+          <div class="processing-content" [class.expanded]="isProcessingExpanded()">
+            {{ processingInfo() }}
+          </div>
+        </div>
+      }
+
+      <div class="content markdown-body" [innerHTML]="mainContent | markdown"></div>
+      @if (isStreaming() && message().role === 'assistant') {
+        <span class="cursor-blink"></span>
+      }
+
+      @if (message().references?.length) {
+        <details class="references">
+          <summary>References ({{ message().references!.length }})</summary>
+          <ol>
+            @for (ref of message().references; track ref.reference_id) {
+              <li>
+                <span class="ref-file">{{ ref.file_path }}</span>
+                @if (ref.content?.length) {
+                  <ul class="ref-content">
+                    @for (c of ref.content; track c) {
+                      <li>{{ c }}</li>
+                    }
+                  </ul>
+                }
+              </li>
+            }
+          </ol>
+        </details>
+      }
+    </div>
+
+    <div class="msg-actions">
+      <button class="action-btn" (click)="copyContent()" title="Copy" aria-label="Copy message">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
+    </div>
   </div>
+
+  @if (message().role === 'user') {
+    <div class="msg-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    </div>
+  }
 </div>

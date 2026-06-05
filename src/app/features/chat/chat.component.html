@@ -2,7 +2,6 @@
   <app-header title="Chat" />
 
   <div class="chat-layout">
-    <!-- Messages area -->
     <div class="messages-area scroll-area" #scrollArea>
       <div class="messages-inner">
         @if (messages().length === 0) {
@@ -46,63 +45,46 @@
           </div>
         }
 
-        @for (msg of messages(); track msg.id) {
-          @if (msg.role === 'user') {
-            <div class="msg-row user-msg-wrapper">
-              <button class="delete-btn" (click)="deleteMessage(msg.id)" title="Delete message" aria-label="Delete message">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
-              <div class="msg-content">
-                <app-chat-message [message]="msg" />
-              </div>
-            </div>
-          } @else if (msg.role === 'assistant' && msg.graphData && msg.graphData.entities.length) {
-            <div class="msg-row">
-              <div class="split-message">
-                <div class="split-graph">
-                  <app-chat-graph-viewer [data]="msg.graphData!" />
+        <div class="msg-list">
+          @for (msg of messages(); track msg.id) {
+            <div class="msg-item">
+              @if (msg.role === 'assistant' && msg.graphData && msg.graphData.entities.length) {
+                <div class="split-message">
+                  <div class="split-graph">
+                    <app-chat-graph-viewer [data]="msg.graphData!" />
+                  </div>
+                  <div class="split-text">
+                    <app-chat-message [message]="msg" [isStreaming]="isStreaming() && $last" [processingInfo]="msg.processingInfo || ''" />
+                  </div>
                 </div>
-                <div class="split-text">
-                  <app-chat-message [message]="msg" />
-                </div>
-              </div>
-              <button class="delete-btn" (click)="deleteMessage(msg.id)" title="Delete message" aria-label="Delete message">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
-            </div>
-          } @else {
-            <div class="msg-row">
-              <div class="msg-content">
-                <app-chat-message [message]="msg" />
-              </div>
-              <button class="delete-btn" (click)="deleteMessage(msg.id)" title="Delete message" aria-label="Delete message">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              } @else {
+                <app-chat-message
+                  [message]="msg"
+                  [isStreaming]="isStreaming() && $last"
+                  [processingInfo]="msg.processingInfo || ''"
+                />
+              }
+              <button class="delete-btn" (click)="deleteMessage(msg.id)" title="Delete" aria-label="Delete message">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
               </button>
             </div>
           }
-        }
+        </div>
 
         @if (isLoading()) {
           <div class="streaming-indicator" role="status" aria-live="polite">
             <span class="typing-dot" aria-hidden="true"></span>
             <span class="typing-dot" aria-hidden="true"></span>
             <span class="typing-dot" aria-hidden="true"></span>
-            Generating response...
+            @if (isStreaming()) { Streaming... } @else { Generating response... }
           </div>
         }
       </div>
     </div>
 
-    <!-- Input area - fixed at bottom -->
     <div class="input-area">
       <div class="input-container">
         <div class="mode-toggle">
@@ -126,20 +108,28 @@
             aria-label="Chat message"
             rows="1"
           ></textarea>
-          <button
-            class="send-btn"
-            (click)="sendMessage()"
-            [disabled]="isLoading() || !query.trim()"
-          >
-            @if (isLoading()) {
-              <span class="loading-spinner-small" aria-hidden="true"></span>
-            } @else {
+          @if (isStreaming()) {
+            <button class="send-btn stop-btn" (click)="stopStreaming()" title="Stop streaming">
               <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                <rect x="4" y="4" width="16" height="16" rx="2"></rect>
               </svg>
-            }
-          </button>
+            </button>
+          } @else {
+            <button
+              class="send-btn"
+              (click)="sendMessage()"
+              [disabled]="isLoading() || !query.trim()"
+            >
+              @if (isLoading()) {
+                <span class="loading-spinner-small" aria-hidden="true"></span>
+              } @else {
+                <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              }
+            </button>
+          }
           <button
             class="clear-btn"
             (click)="clearConversation()"

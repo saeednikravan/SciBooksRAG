@@ -1,11 +1,11 @@
-import { Component, inject, signal, ViewChild, ElementRef, AfterViewInit, OnInit, effect } from '@angular/core';
+import { Component, inject, signal, ViewChild, ElementRef, AfterViewInit, OnInit, OnDestroy, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { forkJoin } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 import { HeaderComponent } from '../../layout/header/header.component';
 import { ChatMessageComponent } from './chat-message/chat-message.component';
 import { ChatGraphViewerComponent } from './chat-graph-viewer/chat-graph-viewer.component';
 import { ChatService } from '../../core/services/chat.service';
-import { ChatMessage, QueryMode } from '../../core/models/chat.model';
+import { ChatMessage, QueryMode, StreamChunk } from '../../core/models/chat.model';
 
 const HISTORY_KEY = 'scibooksrag_chat_history';
 
@@ -30,7 +30,7 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
     .messages-inner {
       max-width: 1400px;
       margin: 0 auto;
-      padding: 24px 32px 120px;
+      padding: 24px 32px 125px;
     }
 
     /* Empty state - centered, minimal */
@@ -115,32 +115,33 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
-    /* Message rows */
-    .msg-row {
+    /* Message list */
+    .msg-list {
       display: flex;
-      gap: 12px;
-      margin-bottom: 24px;
+      flex-direction: column;
+      gap: 4px;
     }
-    .msg-row .msg-content { flex: 1; min-width: 0; }
-    .msg-row .msg-content ::ng-deep .message { margin-bottom: 0 !important; }
 
-    /* User messages - right aligned */
-    .user-msg-wrapper {
+    .msg-item {
       display: flex;
-      justify-content: flex-end;
+      align-items: flex-start;
+      gap: 6px;
+      position: relative;
     }
-    .user-msg-wrapper .msg-row {
-      justify-content: flex-end;
+
+    .msg-item > app-chat-message {
+      flex: 1;
+      min-width: 0;
     }
 
     /* Delete button */
     .delete-btn {
       flex-shrink: 0;
-      width: 28px;
-      height: 28px;
-      margin-top: 8px;
+      width: 26px;
+      height: 26px;
+      margin-top: 48px;
       border: none;
-      border-radius: var(--radius);
+      border-radius: 6px;
       background: transparent;
       cursor: pointer;
       display: flex;
@@ -150,7 +151,7 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
       transition: all var(--transition);
       opacity: 0;
     }
-    .msg-row:hover .delete-btn {
+    .msg-item:hover .delete-btn {
       opacity: 1;
     }
     .delete-btn:hover {
@@ -318,6 +319,15 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
       transform: none;
     }
 
+    .stop-btn {
+      background: var(--danger-color, #c64545);
+    }
+
+    .stop-btn:hover {
+      background: var(--danger-hover, #a83232) !important;
+      transform: scale(1.02);
+    }
+
     .clear-btn {
       width: 38px;
       height: 38px;
@@ -352,7 +362,7 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
     @keyframes spin { to { transform: rotate(360deg); } }
   `]
 })
-export class ChatComponent implements AfterViewInit, OnInit {
+export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
   private chatService = inject(ChatService);
   @ViewChild('scrollArea') scrollArea!: ElementRef;
 
@@ -360,7 +370,10 @@ export class ChatComponent implements AfterViewInit, OnInit {
   query = '';
   mode = signal<QueryMode>('mix');
   isLoading = signal(false);
+  isStreaming = signal(false);
   error = signal('');
+
+  private destroy$ = new Subject<void>();
 
   availableModes: { value: QueryMode; label: string }[] = [
     { value: 'mix', label: 'With knowledge' },
@@ -382,6 +395,11 @@ export class ChatComponent implements AfterViewInit, OnInit {
     this.scrollToBottom();
   }
 
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
   sendMessage(): void {
     const q = this.query.trim();
     if (!q || this.isLoading()) return;
@@ -389,6 +407,7 @@ export class ChatComponent implements AfterViewInit, OnInit {
     this.query = '';
     this.error.set('');
     this.isLoading.set(true);
+    this.isStreaming.set(true);
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -413,41 +432,89 @@ export class ChatComponent implements AfterViewInit, OnInit {
 
     const currentMode = this.mode();
 
-    forkJoin({
-      text: this.chatService.query({
-        query: q,
-        mode: currentMode,
-        include_references: true,
-        response_type: 'Multiple Paragraphs',
-        top_k: 10,
-        conversation_history: history
-      }),
-      graph: this.chatService.queryData({
-        query: q,
-        mode: currentMode,
-        top_k: 10,
-        chunk_top_k: 10,
-        conversation_history: history,
-        history_turns: history.length
-      })
-    }).subscribe({
-      next: (result) => {
+    this.chatService.queryStream({
+      query: q,
+      mode: currentMode,
+      include_references: true,
+      response_type: 'Multiple Paragraphs',
+      top_k: 10,
+      conversation_history: history
+    }).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (chunk: StreamChunk) => {
+        if (chunk.type === 'chunk' && chunk.data?.content) {
+          this.messages.update(m => {
+            const updated = [...m];
+            const last = updated[updated.length - 1];
+            if (last && last.id === assistantMsg.id) {
+              last.content += chunk.data!.content!;
+            }
+            return updated;
+          });
+        } else if (chunk.type === 'info' && chunk.data?.content) {
+          this.messages.update(m => {
+            const updated = [...m];
+            const last = updated[updated.length - 1];
+            if (last && last.id === assistantMsg.id) {
+              last.processingInfo = chunk.data!.content!;
+            }
+            return updated;
+          });
+        } else if (chunk.type === 'references' && chunk.data?.references) {
+          this.messages.update(m => {
+            const updated = [...m];
+            const last = updated[updated.length - 1];
+            if (last && last.id === assistantMsg.id) {
+              last.references = chunk.data!.references!;
+            }
+            return updated;
+          });
+        } else if (chunk.type === 'done') {
+          this.messages.update(m => {
+            const updated = [...m];
+            const last = updated[updated.length - 1];
+            if (last && last.id === assistantMsg.id) {
+              if (!last.content) last.content = '(empty response)';
+              if (chunk.data?.graph_data) last.graphData = chunk.data.graph_data;
+            }
+            return updated;
+          });
+          this.isStreaming.set(false);
+          this.isLoading.set(false);
+          this.saveHistory();
+        } else if (chunk.type === 'error') {
+          this.error.set(chunk.data?.content || 'Stream error');
+          this.messages.update(m => {
+            const updated = [...m];
+            const last = updated[updated.length - 1];
+            if (last && last.id === assistantMsg.id) {
+              last.content = `Error: ${chunk.data?.content || 'Stream failed'}`;
+            }
+            return updated;
+          });
+          this.isStreaming.set(false);
+          this.isLoading.set(false);
+          this.saveHistory();
+        }
+      },
+      complete: () => {
+        this.isStreaming.set(false);
+        this.isLoading.set(false);
         this.messages.update(m => {
           const updated = [...m];
           const last = updated[updated.length - 1];
-          if (last && last.id === assistantMsg.id) {
-            last.content = result.text.response || '(empty response)';
-            last.references = result.text.references;
-            last.graphData = result.graph?.data || null;
+          if (last && last.id === assistantMsg.id && !last.content) {
+            last.content = '(empty response)';
           }
           return updated;
         });
-        this.isLoading.set(false);
         this.saveHistory();
       },
       error: (err) => {
+        this.isStreaming.set(false);
         this.isLoading.set(false);
-        this.error.set(err.message || 'Request failed. Check that the SciBooksRAG server is running.');
+        this.error.set(err.message || 'Stream request failed');
         this.messages.update(m => {
           const updated = [...m];
           const last = updated[updated.length - 1];
@@ -459,6 +526,35 @@ export class ChatComponent implements AfterViewInit, OnInit {
         this.saveHistory();
       }
     });
+
+    // Also fetch graph data in parallel
+    this.chatService.queryData({
+      query: q,
+      mode: currentMode,
+      top_k: 10,
+      chunk_top_k: 10,
+      conversation_history: history,
+      history_turns: history.length
+    }).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (result) => {
+        this.messages.update(m => {
+          const updated = [...m];
+          const last = updated[updated.length - 1];
+          if (last && last.id === assistantMsg.id && result?.data) {
+            last.graphData = result.data;
+          }
+          return updated;
+        });
+      }
+    });
+  }
+
+  stopStreaming(): void {
+    this.destroy$.next();
+    this.isStreaming.set(false);
+    this.isLoading.set(false);
   }
 
   deleteMessage(msgId: string): void {
