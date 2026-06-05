@@ -22,19 +22,19 @@ export class AuthService {
     const headers = new HttpHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' });
     return this.http.post<LoginResponse>(`${this.apiUrl}/login`, body.toString(), { headers }).pipe(
       tap(res => {
-        localStorage.setItem('lightrag_token', res.access_token);
+        localStorage.setItem('scibooksrag_token', res.access_token);
         this.isLoggedInSubject.next(true);
       })
     );
   }
 
   logout(): void {
-    localStorage.removeItem('lightrag_token');
+    localStorage.removeItem('scibooksrag_token');
     this.isLoggedInSubject.next(false);
   }
 
   getToken(): string | null {
-    return localStorage.getItem('lightrag_token');
+    return localStorage.getItem('scibooksrag_token');
   }
 
   isAuthenticated(): boolean {
@@ -42,6 +42,6 @@ export class AuthService {
   }
 
   private hasToken(): boolean {
-    return !!localStorage.getItem('lightrag_token');
+    return !!localStorage.getItem('scibooksrag_token');
   }
 }

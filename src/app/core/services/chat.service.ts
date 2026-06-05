@@ -14,7 +14,7 @@ export class ChatService {
 
   queryStream(request: QueryRequest): Observable<string> {
     return new Observable(observer => {
-      const token = localStorage.getItem('lightrag_token');
+      const token = localStorage.getItem('scibooksrag_token');
       const url = `${environment.apiBaseUrl}/query/stream`;
       fetch(url, {
         method: 'POST',
@@ -66,7 +66,7 @@ export class ChatService {
 
   getConversationHistory(): Array<{ role: string; content: string }> {
     try {
-      const history = localStorage.getItem('lightrag_chat_history');
+      const history = localStorage.getItem('scibooksrag_chat_history');
       return history ? JSON.parse(history) : [];
     } catch { return []; }
   }
@@ -76,6 +76,6 @@ export class ChatService {
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-20)
       .map(m => ({ role: m.role, content: m.content }));
-    localStorage.setItem('lightrag_chat_history', JSON.stringify(history));
+    localStorage.setItem('scibooksrag_chat_history', JSON.stringify(history));
   }
 }

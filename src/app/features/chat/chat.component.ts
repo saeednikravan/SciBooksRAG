@@ -7,7 +7,7 @@ import { ChatGraphViewerComponent } from './chat-graph-viewer/chat-graph-viewer.
 import { ChatService } from '../../core/services/chat.service';
 import { ChatMessage, QueryMode } from '../../core/models/chat.model';
 
-const HISTORY_KEY = 'lightrag_chat_history';
+const HISTORY_KEY = 'scibooksrag_chat_history';
 
 @Component({
   selector: 'app-chat',
@@ -28,7 +28,7 @@ const HISTORY_KEY = 'lightrag_chat_history';
     }
 
     .messages-inner {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 24px 32px 120px;
     }
@@ -120,9 +120,6 @@ const HISTORY_KEY = 'lightrag_chat_history';
       display: flex;
       gap: 12px;
       margin-bottom: 24px;
-      max-width: 1200px;
-      margin-left: auto;
-      margin-right: auto;
     }
     .msg-row .msg-content { flex: 1; min-width: 0; }
     .msg-row .msg-content ::ng-deep .message { margin-bottom: 0 !important; }
@@ -169,7 +166,7 @@ const HISTORY_KEY = 'lightrag_chat_history';
       width: 100%;
     }
     .split-text {
-      flex: 0 0 35%;
+      flex: 0 0 50%;
       min-width: 0;
     }
     .split-text ::ng-deep .message { margin-bottom: 0 !important; }

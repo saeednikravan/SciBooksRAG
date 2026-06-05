@@ -9,7 +9,7 @@ export class ApiService {
   protected baseUrl = environment.apiBaseUrl;
 
   protected getHeaders(): HttpHeaders {
-    const token = localStorage.getItem('lightrag_token');
+    const token = localStorage.getItem('scibooksrag_token');
     return new HttpHeaders({
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       'Content-Type': 'application/json'
