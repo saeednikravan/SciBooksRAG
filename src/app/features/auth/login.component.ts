@@ -29,7 +29,7 @@ export class LoginComponent {
   private router = inject(Router);
 
   username = 'admin';
-  password = 'Admin@1234';
+  password = 'Admin1234';
   error = signal('');
   loading = signal(false);
 
@@ -45,11 +45,7 @@ export class LoginComponent {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(
-          err.status === 401
-            ? 'Invalid username or password.'
-            : 'Could not connect to the server. Is SciBooksRAG running?'
-        );
+        this.error.set(err.message || 'Invalid username or password.');
       }
     });
   }

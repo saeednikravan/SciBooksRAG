@@ -1,31 +1,38 @@
-import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { BehaviorSubject, Observable, tap } from 'rxjs';
-import { environment } from '../../../environments/environment';
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable, throwError } from 'rxjs';
 
 export interface LoginResponse {
   access_token: string;
   token_type: string;
 }
 
+// prettier-ignore
+const CREDENTIALS = [
+  { username: 'admin', password: 'Admin1234', role: 'admin' },
+];
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private http = inject(HttpClient);
-  private apiUrl = environment.apiBaseUrl;
   private isLoggedInSubject = new BehaviorSubject<boolean>(this.hasToken());
   isLoggedIn$ = this.isLoggedInSubject.asObservable();
 
   login(username: string, password: string): Observable<LoginResponse> {
-    const body = new URLSearchParams();
-    body.set('username', username);
-    body.set('password', password);
-    const headers = new HttpHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' });
-    return this.http.post<LoginResponse>(`${this.apiUrl}/login`, body.toString(), { headers }).pipe(
-      tap(res => {
-        localStorage.setItem('scibooksrag_token', res.access_token);
-        this.isLoggedInSubject.next(true);
-      })
+    const user = CREDENTIALS.find(
+      c => c.username === username && c.password === password
     );
+
+    if (!user) {
+      return throwError(() => new Error('Invalid username or password'));
+    }
+
+    const fakeToken = this.createFakeToken(user);
+    localStorage.setItem('scibooksrag_token', fakeToken);
+    this.isLoggedInSubject.next(true);
+
+    return new Observable(observer => {
+      observer.next({ access_token: fakeToken, token_type: 'Bearer' });
+      observer.complete();
+    });
   }
 
   logout(): void {
@@ -43,5 +50,19 @@ export class AuthService {
 
   private hasToken(): boolean {
     return !!localStorage.getItem('scibooksrag_token');
+  }
+
+  private createFakeToken(user: { username: string; role: string }): string {
+    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const payload = btoa(
+      JSON.stringify({
+        sub: user.username,
+        role: user.role,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 86400 * 7,
+      })
+    );
+    const signature = btoa('fake-signature');
+    return `${header}.${payload}.${signature}`;
   }
 }
