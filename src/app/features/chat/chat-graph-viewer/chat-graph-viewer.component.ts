@@ -196,7 +196,20 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
   }
 
   private colorFor(type: string): string {
-    return COLOR_MAP[type?.toLowerCase()] || COLOR_MAP['default'];
+    if (type && type.toLowerCase() in COLOR_MAP) return COLOR_MAP[type.toLowerCase()];
+    const hash = this.hashString(type);
+    const hue = (hash * 137.508) % 360;
+    return `hsl(${hue}, 75%, 48%)`;
+  }
+
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
   }
 
   private renderGraph() {
