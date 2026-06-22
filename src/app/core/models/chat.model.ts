@@ -1,4 +1,4 @@
-export type QueryMode = 'naive' | 'local' | 'global' | 'hybrid' | 'mix' | 'bypass';
+export type QueryMode = 'hi' | 'bypass';
 
 export interface ChatMessage {
   id: string;
@@ -8,6 +8,25 @@ export interface ChatMessage {
   references?: ReferenceItem[];
   graphData?: QueryDataResponse | null;
   processingInfo?: string;
+  nodes?: GraphNode[];
+  edges?: GraphEdge[];
+}
+
+export interface GraphNode {
+  entity_name: string;
+  entity_type: string;
+  description: string;
+  source_id: string;
+  clusters: string;
+  rank: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  description: string;
+  weight: number;
+  rank: number;
 }
 
 export interface QueryDataEntity {
@@ -58,26 +77,36 @@ export interface ReferenceItem {
 }
 
 export interface StreamChunk {
-  type: 'chunk' | 'references' | 'done' | 'error' | 'info';
+  type: 'chunk' | 'references' | 'final' | 'error' | 'info';
   data?: {
     content?: string;
     references?: ReferenceItem[];
     graph_data?: QueryDataResponse;
+    response?: string;
+    nodes?: GraphNode[];
+    edges?: GraphEdge[];
   };
 }
 
 export interface QueryRequest {
   query: string;
-  mode: 'naive' | 'local' | 'global' | 'hybrid' | 'mix' | 'bypass';
-  include_references?: boolean;
+  mode: QueryMode;
+  only_need_context?: boolean;
   response_type?: string;
+  level?: number;
   top_k?: number;
-  conversation_history?: Array<{ role: string; content: string }>;
+  top_m?: number;
+  community_single_one?: boolean;
+  include_graph?: boolean;
+  max_token_for_text_unit?: number | null;
+  max_token_for_local_context?: number | null;
+  max_token_for_bridge_knowledge?: number | null;
+  max_token_for_community_report?: number | null;
 }
 
 export interface QueryDataRequest {
   query: string;
-  mode: 'naive' | 'local' | 'global' | 'hybrid' | 'mix' | 'bypass';
+  mode: 'hi' | 'bypass';
   top_k?: number;
   chunk_top_k?: number;
   max_entity_tokens?: number;

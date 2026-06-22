@@ -21,9 +21,9 @@ export class ChatService {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/x-ndjson'
+          'Accept': 'text/event-stream'
         },
-        body: JSON.stringify({ ...request, stream: true })
+        body: JSON.stringify(request)
       }).then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const reader = res.body!.getReader();
@@ -33,14 +33,6 @@ export class ChatService {
         const read = () => {
           reader.read().then(({ done, value }) => {
             if (done) {
-              for (const line of buffer.split('\n')) {
-                if (!line.trim()) continue;
-                try {
-                  const parsed = JSON.parse(line);
-                  observer.next(detectChunk(parsed));
-                } catch { /* skip */ }
-              }
-              observer.next({ type: 'done', data: {} });
               observer.complete();
               return;
             }
@@ -49,12 +41,30 @@ export class ChatService {
             buffer = lines.pop() || '';
             for (const line of lines) {
               if (!line.trim()) continue;
+              let parsed: any;
+              const jsonLine = line.startsWith('data: ') ? line.slice(6) : line;
               try {
-                const parsed = JSON.parse(line);
-                const chunk = detectChunk(parsed);
-                observer.next(chunk);
-                if (chunk.type === 'error') observer.error(new Error(chunk.data?.content));
-              } catch { /* skip malformed line */ }
+                parsed = JSON.parse(jsonLine);
+              } catch {
+                continue;
+              }
+              if (parsed.type === 'error') {
+                observer.error(new Error(parsed.error || 'Stream error'));
+                observer.complete();
+                return;
+              }
+              if (parsed.type === 'chunk') {
+                const content = parsed.text || parsed.data?.response || parsed.data?.content || parsed.content || parsed.message || '';
+                if (content) {
+                  observer.next({ type: 'chunk', data: { content } } as StreamChunk);
+                }
+              } else if (parsed.type === 'final' && parsed.data?.response) {
+                observer.next({ type: 'final', data: parsed.data } as StreamChunk);
+              } else if (parsed.type === 'info') {
+                observer.next({ type: 'info', data: { content: parsed.content || parsed.content } } as StreamChunk);
+              } else if (parsed.type === 'references' && parsed.data?.references) {
+                observer.next({ type: 'references', data: parsed.data } as StreamChunk);
+              }
             }
             read();
           }).catch(err => {
@@ -67,28 +77,6 @@ export class ChatService {
         observer.error(err);
         observer.complete();
       });
-
-      function detectChunk(data: any): StreamChunk {
-        if (data.type === 'chunk' || data.type === 'done' || data.type === 'error') {
-          return data as StreamChunk;
-        }
-        if (data.response) {
-          return { type: 'chunk', data: { content: data.response } };
-        }
-        if (data.references) {
-          return { type: 'references', data: { references: data.references } };
-        }
-        if (data.graph_data || data.entities) {
-          return { type: 'references', data: { graph_data: data } };
-        }
-        if (data.error) {
-          return { type: 'error', data: { content: data.error } };
-        }
-        if (data.info || data.message || data.status || data.processing) {
-          return { type: 'info', data: { content: data.info || data.message || data.status || data.processing || JSON.stringify(data) } };
-        }
-        return { type: 'chunk', data: { content: typeof data === 'string' ? data : JSON.stringify(data) } };
-      }
     });
   }
 

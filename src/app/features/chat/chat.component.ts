@@ -1,4 +1,4 @@
-import { Component, inject, signal, ViewChild, ElementRef, AfterViewInit, OnInit, OnDestroy, effect } from '@angular/core';
+import { Component, inject, signal, ViewChild, ElementRef, AfterViewInit, OnInit, OnDestroy, effect, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { HeaderComponent } from '../../layout/header/header.component';
@@ -365,13 +365,14 @@ const HISTORY_KEY = 'scibooksrag_chat_history';
   `]
 })
 export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
-  private chatService = inject(ChatService);
+ private chatService = inject(ChatService);
   private chatState = inject(ChatStateService);
+  private cdr = inject(ChangeDetectorRef);
   @ViewChild('scrollArea') scrollArea!: ElementRef;
 
   messages = signal<ChatMessage[]>([]);
   query = '';
-  mode = signal<QueryMode>('mix');
+  mode = signal<QueryMode>('hi');
   isLoading = signal(false);
   isStreaming = signal(false);
   error = signal('');
@@ -379,7 +380,7 @@ export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   availableModes: { value: QueryMode; label: string }[] = [
-    { value: 'mix', label: 'With knowledge' },
+    { value: 'hi', label: 'With knowledge' },
     { value: 'bypass', label: 'Without knowledge' }
   ];
 
@@ -439,10 +440,16 @@ export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
     this.chatService.queryStream({
       query: q,
       mode: currentMode,
-      include_references: true,
       response_type: 'Multiple Paragraphs',
-      top_k: 10,
-      conversation_history: history
+      level: 2,
+      top_k: 20,
+      top_m: 10,
+      max_token_for_text_unit: 0,
+      max_token_for_local_context: 0,
+      max_token_for_bridge_knowledge: 0,
+      max_token_for_community_report: 0,
+      community_single_one: false,
+      include_graph: true
     }).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
@@ -456,6 +463,7 @@ export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
             }
             return updated;
           });
+          this.cdr.markForCheck();
         } else if (chunk.type === 'info' && chunk.data?.content) {
           this.messages.update(m => {
             const updated = [...m];
@@ -474,13 +482,41 @@ export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
             }
             return updated;
           });
-        } else if (chunk.type === 'done') {
+        } else if (chunk.type === 'final') {
           this.messages.update(m => {
             const updated = [...m];
             const last = updated[updated.length - 1];
             if (last && last.id === assistantMsg.id) {
-              if (!last.content) last.content = '(empty response)';
-              if (chunk.data?.graph_data) last.graphData = chunk.data.graph_data;
+              if (chunk.data?.response && last.content.length === 0) {
+                last.content = chunk.data.response;
+              }
+              if (chunk.data?.nodes && chunk.data?.edges) {
+                const entities = chunk.data.nodes.map((n, i) => ({
+                  entity_name: n.entity_name,
+                  entity_type: n.entity_type,
+                  description: n.description,
+                  source_id: n.source_id,
+                  file_path: '',
+                  created_at: '',
+                  reference_id: `node_${i}`
+                }));
+                const relationships = chunk.data.edges.map((e, i) => ({
+                  src_id: e.source,
+                  tgt_id: e.target,
+                  description: e.description,
+                  keywords: '',
+                  weight: e.weight,
+                  source_id: '',
+                  file_path: '',
+                  reference_id: `edge_${i}`
+                }));
+                last.graphData = {
+                  entities,
+                  relationships,
+                  chunks: [],
+                  references: []
+                };
+              }
             }
             return updated;
           });
@@ -528,29 +564,6 @@ export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
           return updated;
         });
         this.saveHistory();
-      }
-    });
-
-    // Also fetch graph data in parallel
-    this.chatService.queryData({
-      query: q,
-      mode: currentMode,
-      top_k: 10,
-      chunk_top_k: 10,
-      conversation_history: history,
-      history_turns: history.length
-    }).pipe(
-      takeUntil(this.destroy$)
-    ).subscribe({
-      next: (result) => {
-        this.messages.update(m => {
-          const updated = [...m];
-          const last = updated[updated.length - 1];
-          if (last && last.id === assistantMsg.id && result?.data) {
-            last.graphData = result.data;
-          }
-          return updated;
-        });
       }
     });
   }
