@@ -76,6 +76,9 @@ const COLOR_MAP: Record<string, string> = {
     .close-btn { width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); flex-shrink: 0; }
     .close-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
     .chunk-box { background: var(--bg-tertiary); border-radius: var(--radius); padding: 6px 8px; margin-top: 4px; font-size: 11px; line-height: 1.4; max-height: 80px; overflow-y: auto; }
+    @keyframes edgePulse { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.6; } }
+    :host { --edge-color: #555; }
+    :host-context([data-theme="dark"]) { --edge-color: #aaa; }
   `]
 })
 export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
@@ -243,7 +246,7 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
     });
     const degrees = Array.from(degreeMap.values());
     const maxDeg = Math.max(...degrees, 1);
-    const nodeRadius = d3.scaleSqrt().domain([1, maxDeg]).range([12, 40]);
+    const nodeRadius = d3.scaleSqrt().domain([1, maxDeg]).range([24, 55]);
 
     const typeColorMap = new Map<string, string>();
     this.nodeData = data.entities.map(n => {
@@ -271,6 +274,13 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
     const defs = svg.append('defs');
     defs.append('filter').attr('id', 'glow-chat').append('feDropShadow')
       .attr('dx', 0).attr('dy', 0).attr('stdDeviation', 8).attr('flood-color', '#f59e0b').attr('flood-opacity', 0.6);
+    defs.append('filter').attr('id', 'glow-edge')
+      .append('feGaussianBlur').attr('stdDeviation', 6).attr('result', 'blur');
+    defs.filter('#glow-edge').append('feFlood').attr('flood-color', '#f59e0b').attr('flood-opacity', 1).attr('result', 'color');
+    defs.filter('#glow-edge').append('feComposite').attr('in', 'color').attr('in2', 'blur').attr('operator', 'in').attr('result', 'glow');
+    const feMerge = defs.filter('#glow-edge').append('feMerge');
+    feMerge.append('feMergeNode').attr('in', 'glow');
+    feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
 
     const g = svg.append('g').attr('class', 'main-group');
     this.mainGroup = g;
@@ -282,29 +292,32 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
       });
     svg.call(this.zoomBehavior);
 
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    const initialEdgeColor = isDarkMode ? '#d0d0d0' : '#555';
+
     this.edgeElements = g.append('g').selectAll('path').data(this.edgeData).enter()
       .append('path')
-      .attr('stroke', '#666')
-       .attr('stroke-width', (d: any) => Math.max(5, d.weight * 6))
-       .attr('stroke-opacity', 0.6).attr('fill', 'none')
-       .style('cursor', 'pointer')
-       .on('click', (event: any, d: any) => {
-         event.stopPropagation();
-         const rel = data.relationships.find(r => r.src_id === (d.source.id || d.source) && r.tgt_id === (d.target.id || d.target));
-         if (rel) {
-           this.selectedEdge.set({ src_id: rel.src_id, tgt_id: rel.tgt_id, description: rel.description || '', keywords: rel.keywords || '' });
-           this.selectedNode.set(null);
-         }
-         this.updateHighlights();
-       })
-       .on('mouseenter', (event: any, d: any) => {
-         event.stopPropagation();
-         d3.select(event.currentTarget).attr('stroke-opacity', 1).attr('stroke', '#f59e0b');
-       })
-       .on('mouseleave', (event: any, d: any) => {
-         event.stopPropagation();
-         d3.select(event.currentTarget).attr('stroke-opacity', 0.6).attr('stroke', '#666');
-       });
+        .attr('stroke-width', (d: any) => Math.max(3, d.weight * 3.5))
+        .attr('stroke-opacity', 0.85).attr('fill', 'none')
+        .style('cursor', 'pointer')
+        .attr('stroke', initialEdgeColor)
+        .on('click', (event: any, d: any) => {
+          event.stopPropagation();
+          const rel = data.relationships.find(r => r.src_id === (d.source.id || d.source) && r.tgt_id === (d.target.id || d.target));
+          if (rel) {
+            this.selectedEdge.set({ src_id: rel.src_id, tgt_id: rel.tgt_id, description: rel.description || '', keywords: rel.keywords || '' });
+            this.selectedNode.set(null);
+          }
+          this.updateHighlights();
+        })
+        .on('mouseenter', (event: any, d: any) => {
+          event.stopPropagation();
+          d3.select(event.currentTarget).attr('stroke-opacity', 1).attr('stroke', '#f59e0b').attr('stroke-width', Math.max(5, (d.weight || 1) * 5));
+        })
+        .on('mouseleave', (event: any, d: any) => {
+          event.stopPropagation();
+          this.updateHighlights();
+        });
 
     const nodeGroups = g.append('g').selectAll('g').data(this.nodeData).enter()
       .append('g').style('cursor', 'pointer')
@@ -350,11 +363,11 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
 
     nodeGroups.append('text')
       .text((d: any) => d.label)
-      .attr('x', 24).attr('y', 8).attr('font-size', '22px')
-      .attr('fill', '#333').attr('font-weight', '600')
+      .attr('x', (d: any) => d._radius + 8).attr('y', 6).attr('font-size', '16px')
+      .attr('fill', 'var(--text-primary)').attr('font-weight', '600')
       .style('pointer-events', 'none').style('user-select', 'none')
       .style('paint-order', 'stroke')
-      .style('stroke', '#fff').style('stroke-width', '4px');
+      .style('stroke', 'var(--bg-primary)').style('stroke-width', '3px');
 
     svg.on('click', () => {
       this.selectedNode.set(null);
@@ -392,6 +405,7 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
     const selId = this.selectedNode()?.entity_name || null;
     const hoverId = this.hoveredNode();
     const activeId = hoverId || selId;
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
 
     if (!this.nodeElements || !this.edgeElements) return;
 
@@ -400,7 +414,7 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
         .attr('stroke', '#fff').attr('stroke-width', 4).style('filter', null);
       this.nodeElements.style('opacity', 1);
       this.nodeElements.selectAll('text').style('display', null);
-      this.edgeElements.style('opacity', 0.35).style('stroke', '#999');
+      this.edgeElements.style('opacity', 0.35).style('stroke', isDarkMode ? '#d0d0d0' : '#555');
       return;
     }
 
@@ -429,25 +443,88 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
     this.nodeElements.selectAll('text').style('display', (d: any) => neighborIds.has(d.id) ? null : 'none');
 
     const selEdge = this.selectedEdge();
-    this.edgeElements.style('opacity', (d: any) => {
-      const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
-      const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
-      if (selEdge) {
-        const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
-        const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
-        return (key === selKey || rev === selRev) ? 1 : 0.1;
-      }
-      return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? 0.9 : 0.15;
-    }).style('stroke', (d: any) => {
-      const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
-      const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
-      if (selEdge) {
-        const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
-        const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
-        return (key === selKey || rev === selRev) ? '#f59e0b' : '#666';
-      }
-      return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? '#f59e0b' : '#666';
-    });
+    const defaultEdgeColor = isDarkMode ? '#d0d0d0' : '#555';
+    const connectedColor = '#f59e0b';
+    this.edgeElements
+      .style('opacity', (d: any) => {
+        const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+        const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+        if (selEdge) {
+          const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
+          const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
+          return (key === selKey || rev === selRev) ? 1 : 0.1;
+        }
+        return connEdgeKeys.has(key) || connEdgeKeys.has(rev) ? 0.9 : 0.15;
+      })
+      .attr('stroke', (d: any) => {
+        const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+        const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+        if (selEdge) {
+          const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
+          const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
+          if (key === selKey || rev === selRev) {
+            return '#f59e0b';
+          }
+          return defaultEdgeColor;
+        }
+        if (connEdgeKeys.has(key) || connEdgeKeys.has(rev)) {
+          return connectedColor;
+        }
+        return defaultEdgeColor;
+      })
+      .attr('stroke-width', (d: any) => {
+        const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+        const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+        if (selEdge) {
+          const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
+          const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
+          if (key === selKey || rev === selRev) {
+            return Math.max(6, (d.weight || 1) * 7);
+          }
+          return Math.max(3, (d.weight || 1) * 3.5);
+        }
+        return Math.max(3, (d.weight || 1) * 3.5);
+      })
+      .attr('stroke-opacity', (d: any) => {
+        const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+        const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+        if (selEdge) {
+          const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
+          const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
+          if (key === selKey || rev === selRev) {
+            return 1;
+          }
+          return 0.3;
+        }
+        if (connEdgeKeys.has(key) || connEdgeKeys.has(rev)) {
+          return 0.9;
+        }
+        return 0.35;
+      })
+      .attr('filter', (d: any) => {
+        const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+        const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+        if (selEdge) {
+          const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
+          const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
+          if (key === selKey || rev === selRev) {
+            return 'url(#glow-edge)';
+          }
+        }
+        return null;
+      })
+      .attr('stroke-dasharray', (d: any) => {
+        const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+        const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+        if (selEdge) {
+          const selKey = `${selEdge.src_id}|${selEdge.tgt_id}`;
+          const selRev = `${selEdge.tgt_id}|${selEdge.src_id}`;
+          if (key === selKey || rev === selRev) {
+            return '8 4';
+          }
+        }
+        return null;
+      });
   }
 
   navigateToNode(entityName: string) {
