@@ -436,136 +436,201 @@ export class ChatComponent implements AfterViewInit, OnInit, OnDestroy {
       .map(m => ({ role: m.role, content: m.content }));
 
     const currentMode = this.mode();
+    let subscription: any;
 
-    this.chatService.queryStream({
-      query: q,
-      mode: currentMode,
-      response_type: 'Multiple Paragraphs',
-      level: 2,
-      top_k: 20,
-      top_m: 10,
-      max_token_for_text_unit: 0,
-      max_token_for_local_context: 0,
-      max_token_for_bridge_knowledge: 0,
-      max_token_for_community_report: 0,
-      community_single_one: false,
-      include_graph: true
-    }).pipe(
-      takeUntil(this.destroy$)
-    ).subscribe({
-      next: (chunk: StreamChunk) => {
-        if (chunk.type === 'chunk' && chunk.data?.content) {
-          this.messages.update(m => {
-            const updated = [...m];
-            const last = updated[updated.length - 1];
-            if (last && last.id === assistantMsg.id) {
-              last.content += chunk.data!.content!;
-            }
-            return updated;
-          });
-          this.cdr.markForCheck();
-        } else if (chunk.type === 'info' && chunk.data?.content) {
-          this.messages.update(m => {
-            const updated = [...m];
-            const last = updated[updated.length - 1];
-            if (last && last.id === assistantMsg.id) {
-              last.processingInfo = chunk.data!.content!;
-            }
-            return updated;
-          });
-        } else if (chunk.type === 'references' && chunk.data?.references) {
-          this.messages.update(m => {
-            const updated = [...m];
-            const last = updated[updated.length - 1];
-            if (last && last.id === assistantMsg.id) {
-              last.references = chunk.data!.references!;
-            }
-            return updated;
-          });
-        } else if (chunk.type === 'final') {
-          this.messages.update(m => {
-            const updated = [...m];
-            const last = updated[updated.length - 1];
-            if (last && last.id === assistantMsg.id) {
-              if (chunk.data?.response && last.content.length === 0) {
-                last.content = chunk.data.response;
+    if (currentMode === 'bypass') {
+ subscription = this.chatService.llmStream(q).pipe(
+        takeUntil(this.destroy$)
+      ).subscribe({
+        next: (chunk: StreamChunk) => {
+          if (chunk.type === 'chunk' && chunk.data?.content) {
+            this.messages.update(m => {
+              const updated = [...m];
+              const last = updated[updated.length - 1];
+              if (last && last.id === assistantMsg.id) {
+                last.content += chunk.data!.content!;
               }
-              if (chunk.data?.nodes && chunk.data?.edges) {
-                const entities = chunk.data.nodes.map((n, i) => ({
-                  entity_name: n.entity_name,
-                  entity_type: n.entity_type,
-                  description: n.description,
-                  source_id: n.source_id,
-                  file_path: '',
-                  created_at: '',
-                  reference_id: `node_${i}`
-                }));
-                const relationships = chunk.data.edges.map((e, i) => ({
-                  src_id: e.source,
-                  tgt_id: e.target,
-                  description: e.description,
-                  keywords: '',
-                  weight: e.weight,
-                  source_id: '',
-                  file_path: '',
-                  reference_id: `edge_${i}`
-                }));
-                last.graphData = {
-                  entities,
-                  relationships,
-                  chunks: [],
-                  references: []
-                };
+              return updated;
+            });
+            this.cdr.markForCheck();
+          } else if (chunk.type === 'final') {
+            this.isStreaming.set(false);
+            this.isLoading.set(false);
+            this.saveHistory();
+          } else if (chunk.type === 'error') {
+            this.error.set(chunk.data?.content || 'Stream error');
+            this.messages.update(m => {
+              const updated = [...m];
+              const last = updated[updated.length - 1];
+              if (last && last.id === assistantMsg.id) {
+                last.content = `Error: ${chunk.data?.content || 'Stream failed'}`;
               }
-            }
-            return updated;
-          });
+              return updated;
+            });
+            this.isStreaming.set(false);
+            this.isLoading.set(false);
+            this.saveHistory();
+          }
+        },
+        complete: () => {
           this.isStreaming.set(false);
           this.isLoading.set(false);
+          this.messages.update(m => {
+            const updated = [...m];
+            const last = updated[updated.length - 1];
+            if (last && last.id === assistantMsg.id && !last.content) {
+              last.content = '(empty response)';
+            }
+            return updated;
+          });
           this.saveHistory();
-        } else if (chunk.type === 'error') {
-          this.error.set(chunk.data?.content || 'Stream error');
+        },
+        error: (err) => {
+          this.isStreaming.set(false);
+          this.isLoading.set(false);
+          this.error.set(err.message || 'Stream request failed');
           this.messages.update(m => {
             const updated = [...m];
             const last = updated[updated.length - 1];
             if (last && last.id === assistantMsg.id) {
-              last.content = `Error: ${chunk.data?.content || 'Stream failed'}`;
+              last.content = `Error: ${err.message || 'Request failed'}`;
             }
             return updated;
           });
-          this.isStreaming.set(false);
-          this.isLoading.set(false);
           this.saveHistory();
         }
-      },
-      complete: () => {
-        this.isStreaming.set(false);
-        this.isLoading.set(false);
-        this.messages.update(m => {
-          const updated = [...m];
-          const last = updated[updated.length - 1];
-          if (last && last.id === assistantMsg.id && !last.content) {
-            last.content = '(empty response)';
+      });
+    } else {
+      this.chatService.queryStream({
+        query: q,
+        mode: currentMode,
+        response_type: 'Multiple Paragraphs',
+        level: 2,
+        top_k: 20,
+        top_m: 10,
+        max_token_for_text_unit: 0,
+        max_token_for_local_context: 0,
+        max_token_for_bridge_knowledge: 0,
+        max_token_for_community_report: 0,
+        community_single_one: false,
+        include_graph: true
+      }).pipe(
+        takeUntil(this.destroy$)
+      ).subscribe({
+        next: (chunk: StreamChunk) => {
+          if (chunk.type === 'chunk' && chunk.data?.content) {
+            this.messages.update(m => {
+              const updated = [...m];
+              const last = updated[updated.length - 1];
+              if (last && last.id === assistantMsg.id) {
+                last.content += chunk.data!.content!;
+              }
+              return updated;
+            });
+            this.cdr.markForCheck();
+          } else if (chunk.type === 'info' && chunk.data?.content) {
+            this.messages.update(m => {
+              const updated = [...m];
+              const last = updated[updated.length - 1];
+              if (last && last.id === assistantMsg.id) {
+                last.processingInfo = chunk.data!.content!;
+              }
+              return updated;
+            });
+          } else if (chunk.type === 'references' && chunk.data?.references) {
+            this.messages.update(m => {
+              const updated = [...m];
+              const last = updated[updated.length - 1];
+              if (last && last.id === assistantMsg.id) {
+                last.references = chunk.data!.references!;
+              }
+              return updated;
+            });
+          } else if (chunk.type === 'final') {
+            this.messages.update(m => {
+              const updated = [...m];
+              const last = updated[updated.length - 1];
+              if (last && last.id === assistantMsg.id) {
+                if (chunk.data?.response && last.content.length === 0) {
+                  last.content = chunk.data.response;
+                }
+                if (chunk.data?.nodes && chunk.data?.edges) {
+                  const entities = chunk.data.nodes.map((n, i) => ({
+                    entity_name: n.entity_name,
+                    entity_type: n.entity_type,
+                    description: n.description,
+                    source_id: n.source_id,
+                    file_path: '',
+                    created_at: '',
+                    reference_id: `node_${i}`
+                  }));
+                  const relationships = chunk.data.edges.map((e, i) => ({
+                    src_id: e.source,
+                    tgt_id: e.target,
+                    description: e.description,
+                    keywords: '',
+                    weight: e.weight,
+                    source_id: '',
+                    file_path: '',
+                    reference_id: `edge_${i}`
+                  }));
+                  last.graphData = {
+                    entities,
+                    relationships,
+                    chunks: [],
+                    references: []
+                  };
+                }
+              }
+              return updated;
+            });
+            this.isStreaming.set(false);
+            this.isLoading.set(false);
+            this.saveHistory();
+          } else if (chunk.type === 'error') {
+            this.error.set(chunk.data?.content || 'Stream error');
+            this.messages.update(m => {
+              const updated = [...m];
+              const last = updated[updated.length - 1];
+              if (last && last.id === assistantMsg.id) {
+                last.content = `Error: ${chunk.data?.content || 'Stream failed'}`;
+              }
+              return updated;
+            });
+            this.isStreaming.set(false);
+            this.isLoading.set(false);
+            this.saveHistory();
           }
-          return updated;
-        });
-        this.saveHistory();
-      },
-      error: (err) => {
-        this.isStreaming.set(false);
-        this.isLoading.set(false);
-        this.error.set(err.message || 'Stream request failed');
-        this.messages.update(m => {
-          const updated = [...m];
-          const last = updated[updated.length - 1];
-          if (last && last.id === assistantMsg.id) {
-            last.content = `Error: ${err.message || 'Request failed'}`;
-          }
-          return updated;
-        });
-        this.saveHistory();
-      }
-    });
+        },
+        complete: () => {
+          this.isStreaming.set(false);
+          this.isLoading.set(false);
+          this.messages.update(m => {
+            const updated = [...m];
+            const last = updated[updated.length - 1];
+            if (last && last.id === assistantMsg.id && !last.content) {
+              last.content = '(empty response)';
+            }
+            return updated;
+          });
+          this.saveHistory();
+        },
+        error: (err) => {
+          this.isStreaming.set(false);
+          this.isLoading.set(false);
+          this.error.set(err.message || 'Stream request failed');
+          this.messages.update(m => {
+            const updated = [...m];
+            const last = updated[updated.length - 1];
+            if (last && last.id === assistantMsg.id) {
+              last.content = `Error: ${err.message || 'Request failed'}`;
+            }
+            return updated;
+          });
+          this.saveHistory();
+        }
+      });
+    }
   }
 
   stopStreaming(): void {

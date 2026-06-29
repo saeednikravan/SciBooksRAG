@@ -86,6 +86,68 @@ export class ChatService {
     return this.api.post<{ status: string; data: QueryDataResponse }>('/query/data', request);
   }
 
+  llmStream(query: string): Observable<StreamChunk> {
+    return new Observable(observer => {
+      const token = localStorage.getItem('scibooksrag_token');
+      const url = `${environment.llmBaseUrl}/chat/completions`;
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'default',
+          messages: [{ role: 'user', content: query }],
+          stream: true
+        })
+      }).then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        const read = () => {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              observer.complete();
+              return;
+            }
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.trim() || !line.startsWith('data: ')) continue;
+              const jsonStr = line.slice(6);
+              if (jsonStr === '[DONE]') {
+                observer.next({ type: 'final', data: {} } as StreamChunk);
+                observer.complete();
+                return;
+              }
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const content = parsed.choices?.[0]?.delta?.content;
+                if (content) {
+                  observer.next({ type: 'chunk', data: { content } } as StreamChunk);
+                }
+              } catch {
+                continue;
+              }
+            }
+            read();
+          }).catch(err => {
+            observer.error(err);
+            observer.complete();
+          });
+        };
+        read();
+      }).catch(err => {
+        observer.error(err);
+        observer.complete();
+      });
+    });
+  }
+
   getConversationHistory(): Array<{ role: string; content: string }> {
     try {
       const history = localStorage.getItem('scibooksrag_chat_history');
