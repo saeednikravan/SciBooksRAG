@@ -1,11 +1,13 @@
 import { Component, ElementRef, AfterViewInit, OnDestroy, inject, signal, computed, effect, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { JsonPipe } from '@angular/common';
+
 import { HeaderComponent } from '../../layout/header/header.component';
 import { GraphPropertiesPanelComponent } from './graph-properties-panel.component';
 import { GraphToolbarComponent } from './graph-toolbar.component';
 import { GraphService } from '../../core/services/graph.service';
+import { GraphDataTransferService } from '../../core/services/graph-data-transfer.service';
 import { GraphNode, GraphEdge, KnowledgeGraph } from '../../core/models/graph.model';
+import { QueryDataResponse } from '../../core/models/chat.model';
 import * as d3 from 'd3';
 
 const ENTITY_TYPES = ['person', 'organization', 'location', 'concept', 'event', 'object', 'book', 'author', 'publication', 'field', 'method'];
@@ -16,17 +18,10 @@ const COLOR_MAP: Record<string, string> = {
   field: '#d35400', method: '#2980b9', default: '#95a5a6'
 };
 
-interface ModalState {
-  type: 'createEntity' | 'editEntity' | 'deleteEntity' | 'createRelation' | 'deleteRelation' | 'mergeEntities' | 'editProperty' | '';
-  visible: boolean;
-  error?: string;
-  result?: any;
-}
-
 @Component({
   selector: 'app-graph',
   standalone: true,
-  imports: [FormsModule, HeaderComponent, JsonPipe, GraphPropertiesPanelComponent, GraphToolbarComponent],
+  imports: [FormsModule, HeaderComponent, GraphPropertiesPanelComponent, GraphToolbarComponent],
   templateUrl: './graph.component.html',
   styles: [`
     :host { display: flex; flex-direction: column; flex: 1; min-height: 0; }
@@ -54,9 +49,7 @@ interface ModalState {
     .legend-item:hover { background: var(--bg-tertiary); }
     .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .legend-text { font-size: 11px; text-transform: capitalize; }
-    .fab-panel { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; gap: 6px; padding: 8px 12px; flex-wrap: wrap; justify-content: center; }
-    .fab-title { font-size: 11px; font-weight: 600; color: var(--text-secondary); width: 100%; text-align: center; margin-bottom: 2px; }
-    .fab-btn { font-size: 12px; padding: 5px 10px; }
+ 
     .loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--bg-primary) 80%, transparent); z-index: 100; }
     .spinner-container { text-align: center; }
     .spinner-container p { margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
@@ -66,50 +59,32 @@ interface ModalState {
     :host-context([data-theme="dark"]) .error-banner { background: rgba(231,76,60,0.15); }
     :host-context([data-theme="dark"]) .error-banner h4,
     :host-context([data-theme="dark"]) .error-banner p { color: #f87171; }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal { width: 420px; max-height: 80vh; overflow-y: auto; padding: 0; }
-    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
-    .modal-header h3 { font-size: 15px; font-weight: 600; }
-    .modal-body { padding: 16px 20px; }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
-    .form-group .input { width: 100%; }
-    .form-textarea { min-height: 60px; resize: vertical; font-family: inherit; }
-    .result-box { border-radius: var(--radius); padding: 10px; margin-top: 8px; max-height: 160px; overflow-y: auto; }
-    .error-box { background: #fde8e8; }
-    .success-box { background: var(--bg-tertiary); }
-    .result-box pre { font-size: 11px; white-space: pre-wrap; word-break: break-all; margin: 0; }
-    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border-color); }
     .loading-spinner-small { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 4px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .edit-prop-input { width: 100%; }
-    .filter-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; background: var(--accent-color); color: white; font-size: 11px; cursor: pointer; }
-    .filter-bar { position: absolute; top: 80px; left: 12px; z-index: 10; display: flex; align-items: center; gap: 6px; }
-    .filter-bar .filter-chip { padding: 2px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--border-color); cursor: pointer; background: var(--bg-secondary); color: var(--text-secondary); transition: all 0.15s; }
-    .filter-bar .filter-chip.active { background: var(--accent-color); color: white; border-color: var(--accent-color); }
-    .filter-bar .filter-chip:hover:not(.active) { border-color: var(--accent-color); }
-    .mode-selector { position: absolute; top: 200px; left: 12px; z-index: 10; width: 240px; }
-    .mode-selector select { width: 100%; }
+   
   `]
 })
 export class GraphComponent implements AfterViewInit, OnDestroy {
   private graphService = inject(GraphService);
+  private graphTransfer = inject(GraphDataTransferService);
 
   @ViewChild('graphContainer', { static: true }) graphContainerRef!: ElementRef<HTMLElement>;
 
   entityTypes = ENTITY_TYPES;
   graphData = signal<KnowledgeGraph>({ nodes: [], edges: [] });
+  chatGraphData = signal<QueryDataResponse | null>(null);
+  isChatGraph = signal(false);
+  availableEntityTypes = signal<string[]>([]);
+  entityColorMap = signal<Map<string, string>>(new Map());
+  selectedEntityType = signal('');
   selectedNode = signal<GraphNode | null>(null);
   selectedEdge = signal<GraphEdge | null>(null);
   highlightNodeIds = signal<Set<string>>(new Set());
   connectedEdges = signal<Set<string>>(new Set());
   hoverNodeIds = signal<Set<string>>(new Set());
   hoverEdges = signal<Set<string>>(new Set());
-  selectedLabel = signal('');
-  labelQuery = '';
-  popularLabels = signal<string[]>([]);
-  labelSuggestions = signal<string[]>([]);
-  labelsLoading = signal(false);
+ 
   graphLoading = signal(false);
   graphError = signal('');
   showEmpty = signal(false);
@@ -122,18 +97,10 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
 
   activeNode = computed(() => this.hoveredNode() || this.selectedNode());
 
-  modal = signal<ModalState>({ type: '', visible: false });
-  modalLoading = signal(false);
-
   debugFlag = signal(false);
   debugSize = signal('');
 
-  formEntityName = ''; formEntityType = 'concept'; formEntityDesc = '';
-  formRelSource = ''; formRelTarget = ''; formRelLabel = ''; formRelDesc = '';
-  formDeleteEntity = '';
-  formDelRelSource = ''; formDelRelTarget = '';
-  formMergeSources = ''; formMergeTarget = '';
-  formPropField = ''; formPropValue = '';
+ 
 
   private svg: any = null;
   private mainGroup: any = null;
@@ -149,10 +116,17 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
   filteredNodes = computed(() => {
     const data = this.graphData();
     const q = this.searchQuery().toLowerCase();
-    if (!q) return data.nodes;
-    return data.nodes.filter(n =>
-      n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)
-    );
+    const type = this.selectedEntityType();
+    let nodes = data.nodes;
+    if (type) {
+      nodes = nodes.filter(n => (n.entity_type || '').toLowerCase() === type.toLowerCase());
+    }
+    if (q) {
+      nodes = nodes.filter(n =>
+        n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)
+      );
+    }
+    return nodes;
   });
 
   selectedNodeNeighbors = computed(() => {
@@ -171,7 +145,8 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
   constructor() {
     effect(() => {
       const data = this.graphData();
-      if (data.nodes.length || data.edges.length) {
+      const filtered = this.filteredNodes();
+      if (filtered.length || data.edges.length) {
         this.showEmpty.set(false);
       } else if (!this.graphLoading()) {
         this.showEmpty.set(true);
@@ -229,8 +204,12 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
       }
     });
     this.ro.observe(this.graphContainerRef.nativeElement);
-    this.loadPopularLabels();
-    this.loadGraph();
+
+    const pendingData = this.graphTransfer.pendingGraphData();
+    if (pendingData && pendingData.entities?.length) {
+      this.loadChatGraph(pendingData);
+      this.graphTransfer.pendingGraphData.set(null);
+    }
   }
 
   ngOnDestroy() {
@@ -251,11 +230,21 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
     return COLOR_MAP[type?.toLowerCase()] || COLOR_MAP['default'];
   }
 
-  loadPopularLabels() {
-    this.graphService.getPopularLabels().subscribe({
-      next: (l) => this.popularLabels.set(l),
-      error: () => {}
-    });
+  private chatColorFor(type: string): string {
+    if (type && type.toLowerCase() in COLOR_MAP) return COLOR_MAP[type.toLowerCase()];
+    const hash = this.hashString(type);
+    const hue = (hash * 137.508) % 360;
+    return `hsl(${hue}, 75%, 48%)`;
+  }
+
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
   }
 
  loadSampleData() {
@@ -280,51 +269,55 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
     setTimeout(() => this.renderGraph(), 100);
   }
 
-  searchLabels() {
-    clearTimeout(this.searchTimeout);
-    const q = this.labelQuery.trim();
-    if (!q) { this.labelSuggestions.set([]); return; }
-    this.searchTimeout = setTimeout(() => {
-      this.graphService.searchLabels(q).subscribe({
-        next: (l) => this.labelSuggestions.set(l),
-        error: () => this.labelSuggestions.set([])
-      });
-    }, 250);
-  }
-  searchTimeout: any;
-
-  selectLabel(label: string) {
-    this.selectedLabel.set(label);
-    this.labelQuery = '';
-    this.labelSuggestions.set([]);
-    this.loadGraph();
+  onEntityTypeChange(type: string) {
+    this.selectedEntityType.set(type);
+    setTimeout(() => this.renderGraph(), 0);
   }
 
-  clearLabel() {
-    this.selectedLabel.set('');
-    this.loadGraph();
-  }
-
-  loadGraph() {
+  loadChatGraph(chatData: QueryDataResponse) {
     this.graphLoading.set(true);
     this.graphError.set('');
     this.selectedNode.set(null);
     this.selectedEdge.set(null);
     this.showEmpty.set(false);
-    const label = this.selectedLabel() || '*';
-    this.graphService.getKnowledgeGraph(label, 3, 1000).subscribe({
-      next: (data) => {
-        this.graphLoading.set(false);
-        this.graphData.set(data);
-        setTimeout(() => this.renderGraph(), 100);
-      },
-      error: (err) => {
-        this.graphLoading.set(false);
-        this.graphData.set({ nodes: [], edges: [] });
-        this.graphError.set(err.error?.detail || err.message || 'Failed to load graph');
-        this.showEmpty.set(true);
-      }
+    this.isChatGraph.set(true);
+    this.chatGraphData.set(chatData);
+
+    const nodeMap = new Map<string, GraphNode>();
+    const typeSet = new Set<string>();
+    chatData.entities.forEach(e => {
+      nodeMap.set(e.entity_name, {
+        id: e.entity_name,
+        label: e.entity_name,
+        entity_type: e.entity_type || 'concept',
+        description: e.description || ''
+      });
+      if (e.entity_type) typeSet.add(e.entity_type);
     });
+
+    const edges: GraphEdge[] = chatData.relationships.map(r => ({
+      source: r.src_id,
+      target: r.tgt_id,
+      keywords: r.keywords || '',
+      description: r.description || '',
+      weight: r.weight || 1
+    }));
+
+    this.graphData.set({
+      nodes: Array.from(nodeMap.values()),
+      edges
+    });
+
+    const colorMap = new Map<string, string>();
+    typeSet.forEach((type) => {
+      colorMap.set(type.toLowerCase(), this.chatColorFor(type));
+    });
+    this.availableEntityTypes.set(Array.from(typeSet).sort());
+    this.entityColorMap.set(colorMap);
+    this.selectedEntityType.set('');
+
+    this.graphLoading.set(false);
+    setTimeout(() => this.renderGraph(), 100);
   }
 
   private renderGraph() {
@@ -338,7 +331,15 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
     this.destroyGraph();
     d3.select(el).selectAll('*').remove();
 
-    const data = this.graphData();
+    const fullData = this.graphData();
+    const filtered = this.filteredNodes();
+    const filteredIds = new Set(filtered.map(n => n.id));
+    const data: KnowledgeGraph = {
+      nodes: filteredIds.size > 0 ? fullData.nodes.filter(n => filteredIds.has(n.id)) : fullData.nodes,
+      edges: filteredIds.size > 0
+        ? fullData.edges.filter(e => filteredIds.has(e.source) && filteredIds.has(e.target))
+        : fullData.edges
+    };
     if (!data.nodes?.length) return;
 
     const nodeMap = new Map(data.nodes.map(n => [n.id, n]));
@@ -360,8 +361,8 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
     });
     const degrees = Array.from(degreeMap.values());
     const maxDeg = Math.max(...degrees, 1);
-    const nodeRadius = d3.scaleSqrt().domain([1, maxDeg]).range([20, 80]);
-    const collisionRadius = d3.scaleSqrt().domain([1, maxDeg]).range([28, 100]);
+    const nodeRadius = d3.scaleSqrt().domain([1, maxDeg]).range(this.isChatGraph() ? [24, 55] : [20, 80]);
+    const collisionRadius = d3.scaleSqrt().domain([1, maxDeg]).range(this.isChatGraph() ? [44, 75] : [28, 100]);
 
     const isolatedNodes = data.nodes.filter(n => degreeMap.get(n.id) === 0);
     const connectedNodes = data.nodes.filter(n => (degreeMap.get(n.id) || 0) > 0);
@@ -420,23 +421,31 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
     const defs = svg.append('defs');
     defs.append('filter').attr('id', 'glow').append('feDropShadow')
       .attr('dx', 0).attr('dy', 0).attr('stdDeviation', 5).attr('flood-color', 'var(--accent-color)').attr('flood-opacity', 0.5);
+    if (this.isChatGraph()) {
+      defs.append('filter').attr('id', 'glow-chat').append('feDropShadow')
+        .attr('dx', 0).attr('dy', 0).attr('stdDeviation', 8).attr('flood-color', '#f59e0b').attr('flood-opacity', 0.6);
+    }
 
     const g = svg.append('g').attr('class', 'main-group');
     this.mainGroup = g;
 
     this.zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 8])
+      .scaleExtent(this.isChatGraph() ? [0.05, 10] : [0.1, 8])
       .on('zoom', (e: any) => {
         g.attr('transform', e.transform);
         this.zoomLevel.set(e.transform.k);
       });
     svg.call(this.zoomBehavior);
 
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
     const linkElements = g.append('g').attr('class', 'edges')
       .selectAll('path').data(this.edgeData).enter()
       .append('path')
-      .attr('stroke', '#999').attr('stroke-width', (d: any) => Math.max(2, (d.weight || 1) * 3))
-      .attr('stroke-opacity', 0.4).attr('fill', 'none')
+      .attr('stroke', this.isChatGraph() ? (isDarkMode ? '#d0d0d0' : '#555') : '#999')
+      .attr('stroke-width', (d: any) => this.isChatGraph() ? Math.max(3, (d.weight || 1) * 3.5) : Math.max(2, (d.weight || 1) * 3))
+      .attr('stroke-opacity', this.isChatGraph() ? 0.85 : 0.4)
+      .attr('fill', 'none')
       .style('transition', 'stroke-opacity 0.2s')
       .style('cursor', 'pointer')
       .on('click', (event: any, d: any) => {
@@ -478,7 +487,7 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
       })
       .on('dblclick', (event: any, d: any) => {
         event.stopPropagation();
-        this.expandNode(d.id);
+        this.selectNode(d as GraphNode);
       })
       .on('mouseenter', (event: any, d: any) => {
         event.stopPropagation();
@@ -514,8 +523,8 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
 
     nodeGroups.append('circle')
       .attr('r', (d: any) => d._radius || 8)
-      .attr('fill', (d: any) => this.colorFor(d.entity_type || d.label))
-      .attr('stroke', '#fff').attr('stroke-width', 2)
+      .attr('fill', (d: any) => this.chatColorFor(d.entity_type || 'concept'))
+      .attr('stroke', '#fff').attr('stroke-width', this.isChatGraph() ? 4 : 2)
       .style('transition', 'stroke 0.2s, stroke-width 0.2s');
 
     nodeGroups.append('rect')
@@ -526,11 +535,15 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
 
     nodeGroups.append('text')
       .text((d: any) => d.label)
-      .attr('x', 14).attr('y', 4).attr('font-size', '14px')
-      .attr('fill', '#333').attr('font-weight', '500')
+      .attr('x', this.isChatGraph() ? ((d: any) => d._radius + 8) : 14)
+      .attr('y', 4)
+      .attr('font-size', this.isChatGraph() ? '16px' : '14px')
+      .attr('fill', this.isChatGraph() ? 'var(--text-primary)' : '#333')
+      .attr('font-weight', this.isChatGraph() ? '600' : '500')
       .style('pointer-events', 'none').style('user-select', 'none')
       .style('paint-order', 'stroke')
-      .style('stroke', '#fff').style('stroke-width', '2px');
+      .style('stroke', this.isChatGraph() ? 'var(--bg-primary)' : '#fff')
+      .style('stroke-width', this.isChatGraph() ? '3px' : '2px');
 
     nodeGroups.append('title')
       .text((d: any) => `${d.label}${d.description ? ': ' + d.description : ''}`);
@@ -541,18 +554,18 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
       const mx = (sx + tx) / 2, my = (sy + ty) / 2;
       const dx = tx - sx, dy = ty - sy;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      const offset = 30;
+      const offset = this.isChatGraph() ? 25 : 30;
       const cx = mx + (-dy / len) * offset;
       const cy = my + (dx / len) * offset;
       return `M${sx},${sy} Q${cx},${cy} ${tx},${ty}`;
     };
 
 this.simulation = d3.forceSimulation(this.nodeData)
-      .force('link', d3.forceLink(this.edgeData).id((d: any) => d.id).distance(400))
-      .force('charge', d3.forceManyBody().strength(-600))
+      .force('link', d3.forceLink(this.edgeData).id((d: any) => d.id).distance(this.isChatGraph() ? 200 : 400))
+      .force('charge', d3.forceManyBody().strength(this.isChatGraph() ? -300 : -600))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide(d => collisionRadius((d as any).degree || 0)))
-      .alphaDecay(0.08)
+      .force('collision', d3.forceCollide(d => this.isChatGraph() ? ((d as any)._radius + 20) : collisionRadius((d as any).degree || 0)))
+      .alphaDecay(this.isChatGraph() ? 0.1 : 0.08)
       .on('tick', () => {
         linkElements.attr('d', (d: any) =>
           curvePath(d.source.x, d.source.y, d.target.x, d.target.y)
@@ -563,11 +576,26 @@ this.simulation = d3.forceSimulation(this.nodeData)
         nodeGroups.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
       });
 
-    const initialScale = Math.min(1, 800 / Math.max(width, height));
-    const offsetX = (width - width * initialScale) / 2;
-    const offsetY = (height - height * initialScale) / 2;
-    svg.call(this.zoomBehavior.transform, d3.zoomIdentity.translate(offsetX, offsetY).scale(initialScale));
-    this.zoomLevel.set(initialScale);
+    const padding = 80;
+    const nodes = this.nodeData;
+    if (nodes.length) {
+      const minX = Math.min(...nodes.map(n => n.x));
+      const maxX = Math.max(...nodes.map(n => n.x));
+      const minY = Math.min(...nodes.map(n => n.y));
+      const maxY = Math.max(...nodes.map(n => n.y));
+      const graphWidth = maxX - minX || width;
+      const graphHeight = maxY - minY || height;
+      const scale = Math.min((width - padding * 2) / graphWidth, (height - padding * 2) / graphHeight, 3);
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const tx = width / 2 - centerX * scale;
+      const ty = height / 2 - centerY * scale;
+      svg.transition().duration(600).call(
+        this.zoomBehavior.transform,
+        d3.zoomIdentity.translate(tx, ty).scale(Math.max(scale, 0.1))
+      );
+      this.zoomLevel.set(scale);
+    }
   }
 
   private updateHighlights() {
@@ -576,14 +604,24 @@ this.simulation = d3.forceSimulation(this.nodeData)
     if (!this.nodeElements || !this.edgeElements) return;
 
     const activeId = hoverId || selId;
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+ const isChat = this.isChatGraph();
+    const defaultStrokeWidth = isChat ? 4 : 3;
+    const activeStrokeWidth = isChat ? 5 : 4;
+    const neighborStrokeWidth = isChat ? 4 : 3;
+    const inactiveStrokeWidth = isChat ? 2 : 1;
+    const defaultEdgeColor = isChat ? (isDarkMode ? '#d0d0d0' : '#555') : '#999';
+    const connEdgeColor = '#f59e0b';
+    const glowFilter = isChat ? 'url(#glow-chat)' : 'url(#glow)';
+
   if (!activeId) {
       this.nodeElements.selectAll('circle')
- .attr('stroke', '#fff').attr('stroke-width', 3)
+  .attr('stroke', '#fff').attr('stroke-width', defaultStrokeWidth)
         .style('filter', null);
       this.nodeElements.selectAll('.node-label-bg').attr('fill', 'transparent').attr('stroke', 'transparent');
       this.nodeElements.style('opacity', 1);
       this.nodeElements.selectAll('text').style('display', null);
-      this.edgeElements.style('opacity', (d: any) => Math.max(0.3, (d.weight || 1) * 0.4));
+      this.edgeElements.style('opacity', (d: any) => isChat ? 0.85 : Math.max(0.3, (d.weight || 1) * 0.4));
       return;
     }
 
@@ -595,7 +633,7 @@ this.simulation = d3.forceSimulation(this.nodeData)
       const circle = d3.select(this).select('circle');
       const bg = d3.select(this).select('.node-label-bg');
       if (d.id === activeId) {
-        circle.attr('stroke', '#f59e0b').attr('stroke-width', 4).style('filter', 'url(#glow)');
+        circle.attr('stroke', '#f59e0b').attr('stroke-width', activeStrokeWidth).style('filter', glowFilter);
         const textEl = d3.select(this).select('text').node() as SVGTextElement | null;
         const bbox = textEl?.getBBox() ?? { x: 10, y: -8, width: 40, height: 16 };
         bg.attr('fill', '#fef3c7').attr('stroke', '#f59e0b').attr('stroke-width', 1)
@@ -604,14 +642,14 @@ this.simulation = d3.forceSimulation(this.nodeData)
           .attr('width', bbox.width + 4)
           .attr('height', bbox.height + 4);
       } else if (neighborIds.has(d.id)) {
-        circle.attr('stroke', '#fff').attr('stroke-width', 3).style('filter', null);
+        circle.attr('stroke', '#fff').attr('stroke-width', neighborStrokeWidth).style('filter', null);
         bg.attr('fill', 'transparent').attr('stroke', 'transparent');
       } else {
-        circle.attr('stroke', '#fff').attr('stroke-width', 1).style('filter', null);
+        circle.attr('stroke', '#fff').attr('stroke-width', inactiveStrokeWidth).style('filter', null);
         bg.attr('fill', 'transparent').attr('stroke', 'transparent');
       }
     });
-    this.nodeElements.style('opacity', (d: any) => neighborIds.has(d.id) ? 1 : 0.15);
+    this.nodeElements.style('opacity', (d: any) => neighborIds.has(d.id) ? 1 : (isChat ? 0.15 : 0.15));
     this.nodeElements.selectAll('text').style('display', (d: any) => neighborIds.has(d.id) ? null : 'none');
 
     const selEdge = this.selectedEdge();
@@ -621,18 +659,30 @@ this.simulation = d3.forceSimulation(this.nodeData)
       if (selEdge) {
         const selKey = `${selEdge.source}|${selEdge.target}`;
         const selRev = `${selEdge.target}|${selEdge.source}`;
-        return (key === selKey || rev === selRev) ? 1 : 0.04;
+        return (key === selKey || rev === selRev) ? 1 : (isChat ? 0.1 : 0.04);
       }
-      return connEdges.has(key) || connEdges.has(rev) ? 0.7 : 0.04;
+      return connEdges.has(key) || connEdges.has(rev) ? (isChat ? 0.9 : 0.7) : (isChat ? 0.15 : 0.04);
     }).style('stroke', (d: any) => {
       const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
       const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
       if (selEdge) {
         const selKey = `${selEdge.source}|${selEdge.target}`;
         const selRev = `${selEdge.target}|${selEdge.source}`;
-        return (key === selKey || rev === selRev) ? '#f59e0b' : '#999';
+        return (key === selKey || rev === selRev) ? '#f59e0b' : defaultEdgeColor;
       }
-      return connEdges.has(key) || connEdges.has(rev) ? '#f59e0b' : '#999';
+      return connEdges.has(key) || connEdges.has(rev) ? connEdgeColor : defaultEdgeColor;
+    }).attr('stroke-width', (d: any) => {
+      const key = `${d.source.id || d.source}|${d.target.id || d.target}`;
+      const rev = `${d.target.id || d.target}|${d.source.id || d.source}`;
+      if (selEdge) {
+        const selKey = `${selEdge.source}|${selEdge.target}`;
+        const selRev = `${selEdge.target}|${selEdge.source}`;
+        if (key === selKey || rev === selRev) {
+          return isChat ? Math.max(6, (d.weight || 1) * 7) : Math.max(4, (d.weight || 1) * 5);
+        }
+        return isChat ? Math.max(3, (d.weight || 1) * 3.5) : Math.max(2, (d.weight || 1) * 3);
+      }
+      return isChat ? Math.max(3, (d.weight || 1) * 3.5) : Math.max(2, (d.weight || 1) * 3);
     });
   }
 
@@ -656,51 +706,7 @@ this.simulation = d3.forceSimulation(this.nodeData)
     setTimeout(() => this.updateHighlights(), 0);
   }
 
-  expandNode(nodeId: string) {
-    const node = this.graphData().nodes.find(n => n.id === nodeId);
-    if (!node) return;
-    const label = node.entity_type || node.label;
-    this.graphLoading.set(true);
-    this.graphService.getKnowledgeGraph(label, 2, 200).subscribe({
-      next: (data) => {
-        this.graphLoading.set(false);
-        const current = this.graphData();
-        const existingIds = new Set(current.nodes.map(n => n.id));
-        const existingEdgeKeys = new Set(current.edges.map(e => `${e.source}|${e.target}`));
-        const newNodes = data.nodes.filter(n => !existingIds.has(n.id));
-        const newEdges = data.edges.filter(e => !existingEdgeKeys.has(`${e.source}|${e.target}`));
-        this.graphData.set({
-          nodes: [...current.nodes, ...newNodes],
-          edges: [...current.edges, ...newEdges]
-        });
-      },
-      error: () => this.graphLoading.set(false)
-    });
-  }
-
-  pruneNode(nodeId: string) {
-    const current = this.graphData();
-    const neighborIds = new Set<string>();
-    current.edges.forEach(e => {
-      if (e.source === nodeId) neighborIds.add(e.target);
-      if (e.target === nodeId) neighborIds.add(e.source);
-    });
-    const nodesToRemove = new Set([nodeId]);
-    neighborIds.forEach(nid => {
-      const hasOtherEdge = current.edges.some(e =>
-        (e.source === nid && e.target !== nodeId) ||
-        (e.target === nid && e.source !== nodeId)
-      );
-      if (!hasOtherEdge) nodesToRemove.add(nid);
-    });
-    this.graphData.set({
-      nodes: current.nodes.filter(n => !nodesToRemove.has(n.id)),
-      edges: current.edges.filter(e => !nodesToRemove.has(e.source) && !nodesToRemove.has(e.target))
-    });
-    this.selectedNode.set(null);
-  }
-
-  navigateToNode(nodeId: string) {
+   navigateToNode(nodeId: string) {
     const node = this.graphData().nodes.find(n => n.id === nodeId);
     if (node) {
       this.selectNode(node);
@@ -826,84 +832,7 @@ reheatSimulation() {
     this.showLegendFlag.update(v => !v);
   }
 
-  modalTitle = computed(() => {
-    const t: Record<string, string> = {
-      createEntity: 'Create Entity', editEntity: 'Edit Entity', deleteEntity: 'Delete Entity',
-      createRelation: 'Create Relation', deleteRelation: 'Delete Relation',
-      mergeEntities: 'Merge Entities', editProperty: 'Edit Property'
-    };
-    return t[this.modal().type] || '';
-  });
-
-  openModal(type: ModalState['type']) {
-    this.modal.set({ type, visible: true });
-    this.formEntityName = ''; this.formEntityType = 'concept'; this.formEntityDesc = '';
-    this.formRelSource = ''; this.formRelTarget = ''; this.formRelLabel = ''; this.formRelDesc = '';
-    this.formDeleteEntity = ''; this.formDelRelSource = ''; this.formDelRelTarget = '';
-    this.formMergeSources = ''; this.formMergeTarget = '';
-    this.formPropField = ''; this.formPropValue = '';
-  }
-
   openEditProperty(ev: { type: 'node' | 'edge'; field: string; value: any; nodeId?: string; edgeSource?: string; edgeTarget?: string }) {
-    this.modal.set({ type: 'editProperty', visible: true });
-    this.formPropField = ev.field;
-    this.formPropValue = ev.value || '';
-    this.formEntityName = ev.nodeId || '';
-    this.formRelSource = ev.edgeSource || '';
-    this.formRelTarget = ev.edgeTarget || '';
-  }
-
-  closeModal() { this.modal.set({ type: '', visible: false }); }
-
-  executeModal() {
-    this.modalLoading.set(true);
-    const m = this.modal();
-    let obs;
-
-    switch (m.type) {
-      case 'createEntity':
-        obs = this.graphService.createEntity({ entity_name: this.formEntityName, entity_data: { type: this.formEntityType, description: this.formEntityDesc } });
-        break;
-      case 'editEntity':
-        obs = this.graphService.updateEntity(this.formEntityName, { type: this.formEntityType, description: this.formEntityDesc });
-        break;
-      case 'deleteEntity':
-        obs = this.graphService.deleteEntityByName(this.formDeleteEntity);
-        break;
-      case 'deleteRelation':
-        obs = this.graphService.deleteRelationByEntities(this.formDelRelSource, this.formDelRelTarget);
-        break;
-      case 'createRelation':
-        obs = this.graphService.createRelation({ source_entity: this.formRelSource, target_entity: this.formRelTarget, relation_data: { keywords: this.formRelLabel, description: this.formRelDesc } });
-        break;
-      case 'mergeEntities':
-        const sources = this.formMergeSources.split(',').map(s => s.trim());
-        obs = this.graphService.mergeEntities(sources, this.formMergeTarget);
-        break;
-      case 'editProperty':
-        if (this.formPropField === 'entity_type' || this.formPropField === 'description') {
-          if (this.formEntityName) {
-            obs = this.graphService.updateEntity(this.formEntityName, { [this.formPropField]: this.formPropValue });
-          } else if (this.formRelSource && this.formRelTarget) {
-            obs = this.graphService.updateRelation(this.formRelSource, this.formRelTarget, { [this.formPropField]: this.formPropValue });
-          }
-        }
-        break;
-      default: return;
-    }
-
-    if (!obs) { this.modalLoading.set(false); return; }
-
-    obs.subscribe({
-      next: (res: any) => {
-        this.modalLoading.set(false);
-        this.modal.update(m => ({ ...m, result: res }));
-        setTimeout(() => this.loadGraph(), 500);
-      },
-      error: (err: any) => {
-        this.modalLoading.set(false);
-        this.modal.update(m => ({ ...m, error: err.error?.detail || err.message || 'Request failed' }));
-      }
-    });
+    console.log('Edit property:', ev);
   }
 }

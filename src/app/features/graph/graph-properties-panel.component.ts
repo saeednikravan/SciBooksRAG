@@ -38,8 +38,6 @@ export class GraphPropertiesPanelComponent {
   neighbors = input<{ id: string; label: string }[]>([]);
 
   close = output<void>();
-  expandNode = output<string>();
-  pruneNode = output<string>();
   navigateToNode = output<string>();
   editProperty = output<{ type: 'node' | 'edge'; field: string; value: any; nodeId?: string; edgeSource?: string; edgeTarget?: string }>();
 

@@ -1,5 +1,7 @@
-import { Component, ElementRef, input, effect, viewChild, AfterViewInit, OnDestroy, signal, computed, HostListener } from '@angular/core';
+import { Component, ElementRef, input, effect, viewChild, AfterViewInit, OnDestroy, signal, computed, HostListener, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { QueryDataResponse, QueryDataEntity } from '../../../core/models/chat.model';
+import { GraphDataTransferService } from '../../../core/services/graph-data-transfer.service';
 import * as d3 from 'd3';
 
 const COLOR_MAP: Record<string, string> = {
@@ -92,8 +94,8 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
   isExpanded = signal(false);
 
   toggleExpand() {
-    this.isExpanded.update(v => !v);
-    setTimeout(() => this.renderGraph(), 100);
+    this.graphTransfer.pendingGraphData.set(this.data());
+    this.router.navigate(['/graph']);
   }
 
   @HostListener('document:keydown.escape')
@@ -163,6 +165,9 @@ export class ChatGraphViewerComponent implements AfterViewInit, OnDestroy {
         d3.zoomIdentity.translate(tx, ty).scale(Math.max(scale, 0.3))
       );
     }
+
+  private router = inject(Router);
+  private graphTransfer = inject(GraphDataTransferService);
 
   constructor() {
     effect(() => {
