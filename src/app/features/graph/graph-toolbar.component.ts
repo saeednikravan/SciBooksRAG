@@ -31,10 +31,10 @@ import { Component, input, output } from '@angular/core';
   `]
 })
 export class GraphToolbarComponent {
-  zoom = input(1);
+  zoom = input(0.8);
   nodeCount = input(0);
   edgeCount = input(0);
-  layout = input('force');
+  layout = input('circular');
   settingsOpen = input(false);
 
   zoomIn = output<void>();

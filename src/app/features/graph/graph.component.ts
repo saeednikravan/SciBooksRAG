@@ -88,8 +88,8 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
   graphLoading = signal(false);
   graphError = signal('');
   showEmpty = signal(false);
-  layoutType = signal('force');
-  zoomLevel = signal(1);
+  layoutType = signal('circular');
+  zoomLevel = signal(0.8);
   showLegendFlag = signal(true);
   searchQuery = signal('');
   nodeDragFree = signal(true);
@@ -436,6 +436,7 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
         this.zoomLevel.set(e.transform.k);
       });
     svg.call(this.zoomBehavior);
+    svg.call(this.zoomBehavior.transform, d3.zoomIdentity.scale(0.8));
 
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
 
@@ -576,16 +577,17 @@ this.simulation = d3.forceSimulation(this.nodeData)
         nodeGroups.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
       });
 
-    const padding = 80;
+    const padding = 120;
     const nodes = this.nodeData;
     if (nodes.length) {
-      const minX = Math.min(...nodes.map(n => n.x));
-      const maxX = Math.max(...nodes.map(n => n.x));
-      const minY = Math.min(...nodes.map(n => n.y));
-      const maxY = Math.max(...nodes.map(n => n.y));
+      const maxRadius = Math.max(...nodes.map(n => n._radius || 8));
+      const minX = Math.min(...nodes.map(n => n.x)) - maxRadius;
+      const maxX = Math.max(...nodes.map(n => n.x)) + maxRadius;
+      const minY = Math.min(...nodes.map(n => n.y)) - maxRadius;
+      const maxY = Math.max(...nodes.map(n => n.y)) + maxRadius;
       const graphWidth = maxX - minX || width;
       const graphHeight = maxY - minY || height;
-      const scale = Math.min((width - padding * 2) / graphWidth, (height - padding * 2) / graphHeight, 3);
+      const scale = Math.min((width - padding * 2) / graphWidth, (height - padding * 2) / graphHeight, 0.8);
       const centerX = (minX + maxX) / 2;
       const centerY = (minY + maxY) / 2;
       const tx = width / 2 - centerX * scale;
@@ -595,6 +597,10 @@ this.simulation = d3.forceSimulation(this.nodeData)
         d3.zoomIdentity.translate(tx, ty).scale(Math.max(scale, 0.1))
       );
       this.zoomLevel.set(scale);
+    }
+
+    if (this.layoutType() !== 'force') {
+      setTimeout(() => this.changeLayout(this.layoutType()), 500);
     }
   }
 
