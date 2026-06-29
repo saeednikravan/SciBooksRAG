@@ -1,5 +1,6 @@
 @if (node(); as n) {
-  <div class="panel">
+  <div class="panel" [style.width.%]="width()">
+    <div class="resize-handle" (mousedown)="startResize($event)"></div>
     <div class="panel-header">
       <h3 style="color:{{ colorFor(n.entity_type || '') }}">Node</h3>
       <div style="display:flex;align-items:center;gap:4px;">
@@ -54,7 +55,8 @@
 }
 
 @if (edge(); as e) {
-  <div class="panel">
+  <div class="panel" [style.width.%]="width()">
+    <div class="resize-handle" (mousedown)="startResize($event)"></div>
     <div class="panel-header">
       <h3 style="color:#8b5cf6">Edge</h3>
       <button class="close-btn" (click)="close.emit()" title="Close">

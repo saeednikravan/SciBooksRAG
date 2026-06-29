@@ -43,7 +43,7 @@ const COLOR_MAP: Record<string, string> = {
     .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius); max-height: 180px; overflow-y: auto; z-index: 20; }
     .suggestion-item { padding: 6px 10px; font-size: 12px; cursor: pointer; }
     .suggestion-item:hover { background: var(--bg-tertiary); }
-    .legend { position: absolute; top: 12px; right: 12px; z-index: 10; padding: 10px; max-height: 60%; overflow-y: auto; min-width: 120px; }
+    .legend { position: absolute; bottom: 80px; left: 12px; right: auto; z-index: 10; padding: 10px; max-height: 60%; overflow-y: auto; min-width: 120px; }
     .legend-title { font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
     .legend-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; border-radius: 3px; }
     .legend-item:hover { background: var(--bg-tertiary); }
@@ -80,6 +80,7 @@ export class GraphComponent implements AfterViewInit, OnDestroy {
   selectedEntityType = signal('');
   selectedNode = signal<GraphNode | null>(null);
   selectedEdge = signal<GraphEdge | null>(null);
+  panelWidth = signal<number>(21);
   highlightNodeIds = signal<Set<string>>(new Set());
   connectedEdges = signal<Set<string>>(new Set());
   hoverNodeIds = signal<Set<string>>(new Set());
@@ -841,4 +842,6 @@ reheatSimulation() {
   openEditProperty(ev: { type: 'node' | 'edge'; field: string; value: any; nodeId?: string; edgeSource?: string; edgeTarget?: string }) {
     console.log('Edit property:', ev);
   }
+
+ 
 }

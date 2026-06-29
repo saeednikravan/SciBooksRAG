@@ -66,6 +66,8 @@
       [node]="activeNode()"
       [edge]="selectedEdge()"
       [neighbors]="selectedNodeNeighbors()"
+      [width]="panelWidth()"
+      (widthChange)="panelWidth.set($event)"
       (close)="clearSelection()"
       (navigateToNode)="navigateToNode($event)"
       (editProperty)="openEditProperty($event)"

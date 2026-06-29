@@ -7,25 +7,28 @@ import { GraphNode, GraphEdge } from '../../core/models/graph.model';
   imports: [],
   templateUrl: './graph-properties-panel.component.html',
   styles: [`
-    .panel { position: absolute; top: 12px; right: 160px; z-index: 20; width: 280px; max-height: calc(100% - 80px); background: color-mix(in srgb, var(--bg-primary) 92%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; font-size: 12px; }
-    .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--border-color); }
-    .panel-header h3 { font-size: 13px; font-weight: 600; }
-    .panel-body { overflow-y: auto; padding: 8px 12px 12px; flex: 1; }
+    .panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 20; background: color-mix(in srgb, var(--bg-primary) 92%, transparent); backdrop-filter: blur(12px); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; font-size: 13px; transition: width 0.1s; }
+    .resize-handle { position: absolute; top: 0; bottom: 0; left: -6px; width: 12px; cursor: col-resize; z-index: 25; display: flex; align-items: center; justify-content: center; }
+    .resize-handle::after { content: ''; width: 2px; height: 40px; background: var(--border-color); border-radius: 1px; transition: all 0.2s; }
+    .resize-handle:hover::after { background: var(--accent-color); height: 60px; }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+    .panel-header h3 { font-size: 16px; font-weight: 600; }
+    .panel-body { overflow-y: auto; padding: 16px 20px; flex: 1; }
     .panel-actions { display: flex; gap: 4px; }
     .action-btn { width: 26px; height: 26px; border: 1px solid var(--border-color); border-radius: var(--radius); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all 0.15s; }
     .action-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-    .section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent-color); margin-top: 10px; margin-bottom: 4px; }
-    .prop-row { display: flex; align-items: flex-start; gap: 4px; padding: 2px 0; border-bottom: 1px solid var(--border-color); min-height: 22px; }
+    .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent-color); margin-top: 16px; margin-bottom: 8px; }
+    .prop-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border-color); min-height: 32px; }
     .prop-row:last-child { border-bottom: none; }
-    .prop-name { color: var(--text-secondary); font-weight: 500; flex-shrink: 0; min-width: 60px; }
-    .prop-value { flex: 1; word-break: break-all; cursor: default; }
+    .prop-name { color: var(--text-secondary); font-weight: 500; flex-shrink: 0; min-width: 80px; font-size: 13px; }
+    .prop-value { flex: 1; word-break: break-all; cursor: default; font-size: 14px; }
     .prop-value.clickable { cursor: pointer; color: var(--accent-color); }
     .prop-value.clickable:hover { text-decoration: underline; }
     .prop-edit-btn { flex-shrink: 0; width: 18px; height: 18px; border: none; background: transparent; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s; }
     .prop-row:hover .prop-edit-btn { opacity: 1; }
     .prop-edit-btn:hover { color: var(--accent-color); }
-    .neighbors-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-    .neighbor-chip { padding: 2px 8px; border-radius: 12px; background: var(--bg-tertiary); font-size: 11px; cursor: pointer; transition: background 0.15s; }
+    .neighbors-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .neighbor-chip { padding: 6px 14px; border-radius: 16px; background: var(--bg-tertiary); font-size: 13px; cursor: pointer; transition: background 0.15s; }
     .neighbor-chip:hover { background: var(--accent-color); color: white; }
     .close-btn { width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); }
     .close-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
@@ -36,8 +39,10 @@ export class GraphPropertiesPanelComponent {
   node = input<GraphNode | null>(null);
   edge = input<GraphEdge | null>(null);
   neighbors = input<{ id: string; label: string }[]>([]);
+  width = input<number>(21);
 
   close = output<void>();
+  widthChange = output<number>();
   navigateToNode = output<string>();
   editProperty = output<{ type: 'node' | 'edge'; field: string; value: any; nodeId?: string; edgeSource?: string; edgeTarget?: string }>();
 
@@ -57,5 +62,38 @@ export class GraphPropertiesPanelComponent {
     } else if (this.edge()) {
       this.editProperty.emit({ type: 'edge', field, value, edgeSource: this.edge()!.source, edgeTarget: this.edge()!.target });
     }
+  }
+
+  private resizing = false;
+  private resizeStartX = 0;
+  private resizeStartWidth = 0;
+
+  startResize(event: MouseEvent) {
+    event.preventDefault();
+    this.resizing = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.width();
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', this.onResize.bind(this));
+    document.addEventListener('mouseup', this.stopResize.bind(this));
+  }
+
+  private onResize(event: MouseEvent) {
+    if (!this.resizing) return;
+    const container = document.querySelector('.graph-content') as HTMLElement;
+    if (!container) return;
+    const dx = this.resizeStartX - event.clientX;
+    const containerWidth = container.clientWidth;
+    const deltaPercent = (dx / containerWidth) * 100;
+    let newWidth = this.resizeStartWidth + deltaPercent;
+    newWidth = Math.max(15, Math.min(60, newWidth));
+    this.widthChange.emit(newWidth);
+  }
+
+  private stopResize() {
+    this.resizing = false;
+    document.body.style.userSelect = '';
+    document.removeEventListener('mousemove', this.onResize.bind(this));
+    document.removeEventListener('mouseup', this.stopResize.bind(this));
   }
 }
